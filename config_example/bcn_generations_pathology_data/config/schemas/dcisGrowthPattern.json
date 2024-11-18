@@ -1,0 +1,51 @@
+{
+  "type": "object",
+  "properties": {
+    "solidDCISGP": {
+      "description": "Determine if ductal carcinoma in situ (DCIS) growth patterns (architecture) are described in the report. Assign true: if the DCIS growth pattern is described as solid. Assign false: otherwise.",
+      "type": "boolean"
+    },
+    "cribriformDCISGP": {
+      "description": "Determine if ductal carcinoma in situ (DCIS) growth patterns (architecture) are described in the report. Assign true: if the DCIS growth pattern is described as cribriform. Assign false: otherwise.",
+      "type": "boolean"
+    },
+    "micropapillaryDCISGP": {
+      "description": "Determine if ductal carcinoma in situ (DCIS) growth patterns (architecture) are described in the report. Assign true: if the DCIS growth pattern is described as micropapillary. Assign false: otherwise.",
+      "type": "boolean"
+    },
+    "papillaryDCISGP": {
+      "description": "Determine if ductal carcinoma in situ (DCIS) growth patterns (architecture) are described in the report. Assign true: if the DCIS growth pattern is described as papillary. Assign false: otherwise.",
+      "type": "boolean"
+    },
+    "apocrineDCISGP": {
+      "description": "Determine if ductal carcinoma in situ (DCIS) growth patterns (architecture) are described in the report. Assign true: if the DCIS growth pattern is described as apocrine. Assign false: otherwise.",
+      "type": "boolean"
+    },
+    "flatDCISGP": {
+      "description": "Determine if ductal carcinoma in situ (DCIS) growth patterns (architecture) are described in the report. Assign true: if the DCIS growth pattern is described as flat. Assign false: otherwise.",
+      "type": "boolean"
+    },
+    "comedoDCISGP": {
+      "description": "Determine if ductal carcinoma in situ (DCIS) growth patterns (architecture) are described in the report. Assign true: if the DCIS growth pattern is described as comedo. Assign false: otherwise.",
+      "type": "boolean"
+    },
+    "clingingDCISGP": {
+      "description": "Determine if ductal carcinoma in situ (DCIS) growth patterns (architecture) are described in the report. Assign true: if the DCIS growth pattern is described as clinging. Assign false: otherwise.",
+      "type": "boolean"
+    },
+    "comedonecrosisExtent": {
+      "description": "Determine if the the report contains information on comedo necrosis in ductal carcinoma in situ (DCIS).",
+      "type": ["string", "null"],
+      "enum": ["Y", "N", "Mil", "Mod", "Mar", null],
+      "enumDescriptions": [
+        "Assign 'Y': if the report specifies that comedo necrosis is present in DCIS but the extent is not specified.",
+        "Assign 'N': if the report explicitly specifies that comedo necrosis is not present in DCIS.",
+        "Assign 'Mil': if the report specifies that comedo necrosis is present in DCIS and the extent is mild.",
+        "Assign 'Mod': if the report specifies that comedo necrosis is present in DCIS and the extent is moderate.",
+        "Assign 'Mar': if the report specifies that comedo necrosis is present in DCIS and the extent is marked.",
+        "Assign null: if the report does not contain information on comedo necrosis in DCIS."
+      ]
+    }
+  },
+  "required": ["solidDCISGP", "cribriformDCISGP", "micropapillaryDCISGP", "papillaryDCISGP", "apocrineDCISGP", "flatDCISGP", "comedoDCISGP", "clingingDCISGP", "comedonecrosisExtent"]
+}

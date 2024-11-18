@@ -1,0 +1,12 @@
+{
+  "@context": {
+    "snomed": "https://browser.ihtsdotools.org/?perspective=full&edition=MAIN/2024-06-01&release=&languages=en&latestRedirect=false&conceptId1=",
+    "id": {
+      "@id": "https://example.org/generations-study/subjects/",
+      "@container": "@id"
+    },
+    "sizeWholeTumour": "snomed:263605001",
+    "sizeDcisOnly": "snomed:2710001000004109",
+    "sizeInvasiveTumour": "snomed:384630000"
+  }
+}

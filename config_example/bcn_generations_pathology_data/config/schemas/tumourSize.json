@@ -1,0 +1,18 @@
+{
+  "type": "object",
+  "properties": {
+    "sizeWholeTumour": {
+      "description": "If the size (in mm) of the whole tumour is specified in the report, assign the value to this variable. Otherwise, assign null. Note: ignore sizes of individual foci; only report the size of the whole tumour, if reported. Otherwise, assign null.",
+      "type": ["number", "null"]
+    },
+    "sizeDcisOnly": {
+      "description": "If the size (in mm) of the ductal carcinoma in situ (DCIS) component of the tumour is specified in the report, assign the value to this variable. Otherwise, assign null.",
+      "type": ["number", "null"]
+    },
+    "sizeInvasiveTumour": {
+      "description": "If the size (in mm) of the invasive tumour component of the tumour is specified in the report, assign the value to this variable. Otherwise, assign null.",
+      "type": ["number", "null"]
+    }
+  },
+  "required": ["sizeWholeTumour", "sizeDcisOnly", "sizeInvasiveTumour"]
+}

@@ -1,0 +1,42 @@
+{
+  "@context": {
+    "snomed": "https://browser.ihtsdotools.org/?perspective=full&edition=MAIN/2024-06-01&release=&languages=en&latestRedirect=false&conceptId1=",
+    "ncim": "https://ncimetathesaurus.nci.nih.gov/ncimbrowser/ConceptReport.jsp?dictionary=NCI%20Metathesaurus&code=",
+    "id": {
+      "@id": "https://example.org/generations-study/subjects/",
+      "@container": "@id"
+    },
+    "her2IhcScore": {
+      "@id": "ncim:CL1778287",
+      "@type": "@id",
+      "@vocab": {
+        "0": "ncim:CL545334",
+        "1+": "ncim:CL545335",
+        "2+": "ncim:CL545336",
+        "3+": "ncim:CL545424"
+      }
+    },
+    "her2Status": {
+      "@id": "snomed:3550001000004108",
+      "@type": "@id",
+      "@vocab": {
+        "N": "snomed:431396003",
+        "B": "snomed:371932001",
+        "P": "snomed:427685000",
+        "NP": "snomed:262008008"
+      }
+    },
+    "her2FISH": {
+      "@id": "snomed:434363004",
+      "@type": "@id",
+      "@vocab": {
+        "A": "snomed:1162602001",
+        "N": "snomed:705105000",
+        "P": "ncim:CL539497",
+        "NEG": "ncim:CL539496",
+        "NP": "snomed:262008008"
+      }
+    },
+    "ki67": "snomed:1237281001"
+  }
+}

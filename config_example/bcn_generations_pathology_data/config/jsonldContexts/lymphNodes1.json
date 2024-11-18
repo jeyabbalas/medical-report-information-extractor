@@ -1,0 +1,29 @@
+{
+  "@context": {
+    "snomed": "https://browser.ihtsdotools.org/?perspective=full&edition=MAIN/2024-06-01&release=&languages=en&latestRedirect=false&conceptId1=",
+    "id": {
+      "@id": "https://example.org/generations-study/subjects/",
+      "@container": "@id"
+    },
+    "axillaryProcedure": {
+      "@id": "snomed:301796003",
+      "@type": "@id",
+      "@vocab": {
+        "ANC": "snomed:79544006",
+        "ANS": "snomed:178294003",
+        "NLN": "snomed:416237000",
+        "OSNA": "snomed:1285485007",
+        "SNB": "snomed:396487001"
+      }
+    },
+    "vascularInvasion": {
+      "@id": "snomed:373379001",
+      "@type": "@id",
+      "@vocab": {
+        "Pres": "snomed:372287009",
+        "Poss": "snomed:127495004",
+        "NS": "snomed:127494000"
+      }
+    }
+  }
+}

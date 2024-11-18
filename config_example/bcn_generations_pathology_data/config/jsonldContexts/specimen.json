@@ -1,0 +1,51 @@
+{
+  "@context": {
+    "snomed": "https://browser.ihtsdotools.org/?perspective=full&edition=MAIN/2024-06-01&release=&languages=en&latestRedirect=false&conceptId1=",
+    "custom": "https://example.org/generations-study/custom-ontology#",
+    "id": {
+      "@id": "https://example.org/generations-study/subjects/",
+      "@container": "@id"
+    },
+    "side": {
+      "@id": "snomed:384727002",
+      "@type": "@id",
+      "@vocab": {
+        "L": "snomed:7771000",
+        "R": "snomed:24028007"
+      }
+    },
+    "screenDetected": {
+      "@id": "snomed:171176006",
+      "@type": "@id",
+      "@vocab": {
+        "Y": "snomed:373066001",
+        "N": "snomed:373067005"
+      }
+    },
+    "specimenType": {
+      "@id": "snomed:122548005",
+      "@type": "@id",
+      "@vocab": {
+        "WBB": "snomed:44578009",
+        "WLE": "snomed:237371007",
+        "M": "snomed:1231734007",
+        "NBO": "snomed:21911005",
+        "OB": "snomed:736615002",
+        "Re-ex": "snomed:395165008",
+        "SE": "snomed:237370008",
+        "TMP": "snomed:33496007",
+        "FNA": "snomed:387736007",
+        "LB": "custom:specimenType-LB"
+      }
+    },
+    "specimenWeight": "snomed:371506001",
+    "postNeoadjuvantChemo": {
+      "@id": "snomed:400001000004103",
+      "@type": "@id",
+      "@vocab": {
+        "C": "snomed:1259200004",
+        "E": "snomed:169413002"
+      }
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "@context": {
+    "snomed": "https://browser.ihtsdotools.org/?perspective=full&edition=MAIN/2024-06-01&release=&languages=en&latestRedirect=false&conceptId1=",
+    "id": {
+      "@id": "https://example.org/generations-study/subjects/",
+      "@container": "@id"
+    },
+    "tStage": "snomed:78873005",
+    "nStage": "snomed:277206009",
+    "mStage": "snomed:277208005"
+  }
+}

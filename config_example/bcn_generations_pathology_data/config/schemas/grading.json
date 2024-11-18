@@ -1,0 +1,39 @@
+{
+  "type": "object",
+  "properties": {
+    "invasiveGrade": {
+      "description": "Determine if the report assigns an integer grade for invasive carcinoma, if detected in the patient. The integer grade can either be 1, 2, or 3. It may sometimes be represented as roman numerals— I, II, or III— in which case, convert them into the corresponding integer grade (1, 2, and 3, respectively) when you assign a value for this variable. If you notice typographical or sentence alignment errors due to erratic optical character recognition, use your judgement from the context. Assign null: if no integer grade was assigned in the report for invasive carcinoma.",
+      "type": ["integer", "null"],
+      "enum": [1, 2, 3, null]
+    },
+    "tubulesScore": {
+      "description": "Determine if the report assigns an integer score for tubules formation in invasive carcinoma, if detected in the patient. This information is typically reported in close proximity to the invasive carcinoma grade. The integer tubules formation score can either be 1, 2, or 3. It is sometimes reported prefixed with an 'A' (A1, A2, A3) or 'T' (T1, T2, T3), in which case, convert them into the corresponding integer score (1, 2, and 3, respectively) when you assign a value for this variable. Sometimes three successive numbers are reported next to the invasive grade, e.g. '(3,2,1)', here the first number (3) usually refers to the tubules formation score. If you notice typographical or sentence alignment errors due to erratic optical character recognition, use your judgement from the context. Assign null: if no integer score was assigned in the report for tubules formation in invasive carcinoma.",
+      "type": ["integer", "null"],
+      "enum": [1, 2, 3, null]
+    },
+    "nuclearPleomorphismScore": {
+      "description": "Determine if the report assigns an integer score for nuclear pleomorphism in invasive carcinoma, if detected in the patient. This information is typically reported in close proximity to the invasive carcinoma grade. The integer nuclear pleomorphism score can either be 1, 2, or 3. It is sometimes reported prefixed with an 'N' (N1, N2, N3) or 'P' (P1, P2, P3), in which case, convert them into the corresponding integer score (1, 2, and 3, respectively) when you assign a value for this variable. Sometimes three successive numbers are reported next to the invasive grade, e.g. '(3,2,1)', here the second number (2) usually refers to the nuclear pleomorphism score. If you notice typographical or sentence alignment errors due to erratic optical character recognition, use your judgement from the context. Assign null: if no integer score was assigned in the report for nuclear pleomorphism in invasive carcinoma.",
+      "type": ["integer", "null"],
+      "enum": [1, 2, 3, null]
+    },
+    "mitoticActivityScore": {
+      "description": "Determine if the report assigns an integer score for mitotic activity in invasive carcinoma, if detected in the patient. This information is typically reported in close proximity to the invasive carcinoma grade. The integer mitotic activity score can either be 1, 2, or 3. It is sometimes reported prefixed with an 'M' (M1, M2, M3), in which case, convert them into the corresponding integer score (1, 2, and 3, respectively) when you assign a value for this variable. Sometimes three successive numbers are reported next to the invasive grade, e.g. '(3,2,1)', here the third number (1) usually refers to the mitotic activity score. If you notice typographical or sentence alignment errors due to erratic optical character recognition, use your judgement from the context. Assign null: if no integer score was assigned in the report for mitotic activity in invasive carcinoma.",
+      "type": ["integer", "null"],
+      "enum": [1, 2, 3, null]
+    },
+    "dcisGrade": {
+      "description": "Determine if the report describes the (nuclear) grade of ductal carcinoma in situ (DCIS), if detected in the patient.",
+      "type": ["string", "null"],
+      "enum": ["L", "IL", "I", "HI", "H", null],
+      "enumDescriptions": [
+        "Assign 'L': if the report specifies a low grade DCIS.",
+        "Assign 'IL': if the report specifies an intermediate and low grade DCIS.",
+        "Assign 'I': if the report specifies an intermediate grade DCIS.",
+        "Assign 'HI': if the report specifies a high and intermediate grade DCIS.",
+        "Assign 'H': if the report specifies a high grade DCIS.",
+        "Assign null: if the DCIS grade was not described in the report."
+      ]
+    }
+  },
+  "required": ["invasiveGrade", "tubulesScore", "nuclearPleomorphismScore", "mitoticActivityScore", "dcisGrade"]
+}
