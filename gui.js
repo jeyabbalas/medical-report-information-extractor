@@ -2,7 +2,17 @@ const marieLogoUrl = "https://raw.githubusercontent.com/jeyabbalas/medical-repor
 const githubLogoUrl = "https://raw.githubusercontent.com/jeyabbalas/medical-report-information-extractor/refs/heads/main/assets/github.svg";
 
 function ui(divID) {
-    let divUI = divID ? document.getElementById(divID) : document.createElement('div');
+    const divUI = divID ? document.getElementById(divID) : document.createElement('div');
+
+    const dataPrivacyNotice = `
+<p><span class="font-medium">Data privacy notice</span>: This application uses large language models (LLMs) to process data. It is important to understand how your data will be handled by them.</p>
+<ul class="list-disc list-inside">
+    <li><span class="font-medium">Data sharing</span>: When you use this app, the data you submit will be shared with the LLM provider that you choose. This could be a third-party LLM provider like OpenAI, or a service that you self-host.</li>
+    <li><span class="font-medium">Data use agreements</span>: Before submitting any data, especially sensitive information, carefully review the data use agreement of the data you will submit and the data privacy policy of the LLM provider. Make sure you understand and consent to how the LLM provider will use your data.</li>
+    <li><span class="font-medium">LLM API Base URL</span>: You will be asked to provide the base URL of the LLM API you want to use. This helps you control where your data is sent. For example, if you choose OpenAI's API (<span class="font-mono px-1 rounded">https://api.openai.com/v1</span>), your data will be processed by OpenAI servers.</li>
+    <li><span class="font-medium">Self-hosting</span>: For increased data privacy, instead of using LLMs from third-party providers (e.g. OpenAI), consider self-hosting an LLM on your own machine and providing the corresponding base URL. This keeps your data under your control.</li>
+</ul>
+`;
 
     divUI.innerHTML = `
 <!-- Header -->
@@ -19,7 +29,7 @@ function ui(divID) {
       
         <div class="flex md:mt-0 md:ml-4 shrink-0">
             <a title="Source code" href="https://github.com/jeyabbalas/medical-report-information-extractor">
-                <img src="${githubLogoUrl}" class="h-10 w-10 sm:h-16 sm:w-16 fill-current" alt="github logo" />
+                <img src="${githubLogoUrl}" class="h-10 w-10 sm:h-14 sm:w-14 fill-current" alt="github logo" />
             </a>
         </div>
     </div>
@@ -33,7 +43,7 @@ function ui(divID) {
         </svg>
         <span class="sr-only">Data privacy notice</span>
         <div>
-            <p><span class="font-medium">Data privacy notice</span>: Before submitting any data on this app, it is crucial that you confirm whether the associated data use agreement permits sharing this data with third-party services. This app utilizes OpenAI's API, which means your submitted data will be processed by OpenAI's servers. Once your data is submitted to OpenAI, it will be subject to OpenAI's data policies.</p>
+            ${dataPrivacyNotice}
             <p class="pl-4"></p>
         </div>
     </div>
