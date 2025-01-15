@@ -7,10 +7,10 @@ function ui(divID) {
     const dataPrivacyNotice = `
 <p><span class="font-medium">Data privacy notice</span>: This application uses large language models (LLMs) to process data. It is important to understand how your data will be handled by them.</p>
 <ul class="list-disc list-inside">
-    <li><span class="font-medium">Data sharing</span>: When you use this app, the data you submit will be shared with the LLM provider that you choose. This could be a third-party LLM provider like OpenAI, or a service that you self-host.</li>
+    <li><span class="font-medium">Data sharing</span>: When you use the app, the data you submit is sent to the LLM that you choose. This could be an LLM hosted by a third-party, like OpenAI, or an LLM that you host yourself.</li>
     <li><span class="font-medium">Data use agreements</span>: Before submitting any data, especially sensitive information, carefully review the data use agreement of the data you will submit and the data privacy policy of the LLM provider. Make sure you understand and consent to how the LLM provider will use your data.</li>
-    <li><span class="font-medium">LLM API Base URL</span>: You will be asked to provide the base URL of the LLM API you want to use. This helps you control where your data is sent. For example, if you choose OpenAI's API (<span class="font-mono px-1 rounded">https://api.openai.com/v1</span>), your data will be processed by OpenAI servers.</li>
-    <li><span class="font-medium">Self-hosting</span>: For increased data privacy, instead of using LLMs from third-party providers (e.g. OpenAI), consider self-hosting an LLM on your own machine and providing the corresponding base URL. This keeps your data under your control.</li>
+    <li><span class="font-medium">LLM API base URL</span>: You will be asked to provide the base URL of the LLM API you want to use. This helps you control where your data is sent. For example, if you choose OpenAI's API (<span class="font-mono px-1 rounded">https://api.openai.com/v1</span>), your data will be processed by OpenAI servers.</li>
+    <li><span class="font-medium">Self-hosting</span>: For increased data privacy, instead of using LLMs from third-party providers (e.g. OpenAI), consider self-hosting an LLM on your own machine and providing the corresponding base URL. This keeps your data under your direct control.</li>
 </ul>
 `;
 
