@@ -1,8 +1,10 @@
-import {jsonld} from 'https://esm.sh/jsonld@8.3.3';
+import jsonld from 'https://esm.sh/jsonld@8.3.3';
 
 
 async function buildLinkedTable(container, jsonLdDoc) {
     container.innerHTML = "";
+    const tableWrapper = document.createElement('div');
+    tableWrapper.className = 'relative overflow-x-auto shadow-md sm:rounded-lg my-4 w-full';
 
     // JSON dataset
     const jsonData = jsonLdDoc["@graph"] || [];
@@ -15,7 +17,8 @@ async function buildLinkedTable(container, jsonLdDoc) {
         expandedDoc = await jsonld.expand(jsonLdDoc);
     } catch (err) {
         console.error("Error expanding JSON-LD:", err);
-        container.appendChild(buildPlainTable(jsonData, headers));
+        tableWrapper.appendChild(buildPlainTable(jsonData, headers));
+        container.appendChild(tableWrapper);
         return;
     }
 
@@ -34,18 +37,20 @@ async function buildLinkedTable(container, jsonLdDoc) {
 
     // Linked HTML table
     const table = document.createElement("table");
-    table.style.borderCollapse = "collapse";
-    table.style.border = "1px solid #ccc";
+    table.className = 'w-full text-sm text-left';
+    table.style.color = 'rgb(132, 204, 22)';
 
     // THEAD
     const thead = document.createElement("thead");
+    thead.className = 'text-xs uppercase underline';
+    thead.style.backgroundColor = 'rgb(20, 83, 45)';
+    thead.style.color = 'rgb(190, 242, 100)';
+
     const headerRow = document.createElement("tr");
     for (const header of headers) {
         const th = document.createElement("th");
-        th.style.border = "1px solid #ccc";
-        th.style.padding = "4px";
-
-        th.textContent = header;
+        th.scope = 'col';
+        th.className = 'px-6 py-3';
 
         // If we have a property IRI, hyperlink the header
         const propIri = propertyNameIriMap[header];
@@ -57,8 +62,11 @@ async function buildLinkedTable(container, jsonLdDoc) {
             link.href = propIri;
             link.target = "_blank";
             link.textContent = header;
-            th.textContent = "";
+            link.className = 'underline';
+            link.style.color = 'inherit';
             th.appendChild(link);
+        } else {
+            th.textContent = header;
         }
 
         headerRow.appendChild(th);
@@ -72,14 +80,22 @@ async function buildLinkedTable(container, jsonLdDoc) {
         const originalRow = jsonData[i];
         const expandedRow = flattenedNodes[i] || {};
         const tr = document.createElement("tr");
+        tr.className = 'bg-white border-b';
+        tr.style.setProperty('--tw-hover-bg-opacity', '0.05');
+        tr.style.setProperty('--lime-50', 'rgb(247, 254, 231)');
+
+        tr.addEventListener('mouseenter', () => {
+            tr.style.backgroundColor = 'rgb(247, 254, 231)';
+        });
+        tr.addEventListener('mouseleave', () => {
+            tr.style.backgroundColor = 'white';
+        });
 
         for (const header of headers) {
             const td = document.createElement("td");
-            td.style.border = "1px solid #ccc";
-            td.style.padding = "4px";
+            td.className = 'px-4 py-2';
 
             const originalValue = originalRow[header];
-
             const propertyIri = propertyNameIriMap[header];
             let expandedValue = null;
             if (propertyIri && expandedRow[propertyIri]) {
@@ -87,7 +103,16 @@ async function buildLinkedTable(container, jsonLdDoc) {
             }
 
             if (originalValue === null) {
-                td.textContent = "-";
+                const span = document.createElement('span');
+                span.className = 'text-gray-500';
+                span.textContent = '-';
+                td.appendChild(span);
+            } else if (Array.isArray(originalValue) || typeof originalValue === 'object') {
+                const span = document.createElement('span');
+                span.className = 'font-mono text-sm';
+                span.style.color = 'rgb(75, 85, 99)';
+                span.textContent = JSON.stringify(originalValue);
+                td.appendChild(span);
             } else if (
                 typeof expandedValue === "string" &&
                 (expandedValue.startsWith("http://") ||
@@ -96,10 +121,21 @@ async function buildLinkedTable(container, jsonLdDoc) {
                 const a = document.createElement("a");
                 a.href = expandedValue;
                 a.target = "_blank";
+                a.className = 'underline';
+                a.style.color = 'rgb(101, 163, 13)';
                 a.textContent = String(originalValue);
+                a.addEventListener('mouseenter', () => {
+                    a.style.color = 'rgb(77, 124, 15)'; // lime-800
+                });
+                a.addEventListener('mouseleave', () => {
+                    a.style.color = 'rgb(101, 163, 13)'; // lime-600
+                });
                 td.appendChild(a);
             } else {
-                td.textContent = String(originalValue);
+                const span = document.createElement('span');
+                span.className = 'text-gray-800';
+                span.textContent = String(originalValue);
+                td.appendChild(span);
             }
 
             tr.appendChild(td);
@@ -108,7 +144,8 @@ async function buildLinkedTable(container, jsonLdDoc) {
     }
     table.appendChild(tbody);
 
-    container.appendChild(table);
+    tableWrapper.appendChild(table);
+    container.appendChild(tableWrapper);
 }
 
 
@@ -188,16 +225,16 @@ function flattenExpandedNode(expandedNode) {
  */
 function buildPlainTable(data, headers) {
     const table = document.createElement("table");
-    table.style.borderCollapse = "collapse";
-    table.style.border = "1px solid #ccc";
+    table.className = 'w-full text-sm text-left text-gray-500';
 
     // THEAD
     const thead = document.createElement("thead");
+    thead.className = 'text-xs text-white uppercase bg-green-900';
     const headerRow = document.createElement("tr");
     for (const header of headers) {
         const th = document.createElement("th");
-        th.style.border = "1px solid #ccc";
-        th.style.padding = "4px";
+        th.scope = 'col';
+        th.className = 'px-6 py-3';
         th.textContent = header;
         headerRow.appendChild(th);
     }
@@ -208,12 +245,12 @@ function buildPlainTable(data, headers) {
     const tbody = document.createElement("tbody");
     for (const row of data) {
         const tr = document.createElement("tr");
+        tr.className = 'bg-white border-b hover:bg-green-50';
         for (const header of headers) {
             const td = document.createElement("td");
-            td.style.border = "1px solid #ccc";
-            td.style.padding = "4px";
+            td.className = 'px-4 py-2';
             const val = row[header];
-            td.textContent = (val === null) | (val === undefined) ? "-" : String(val);
+            td.textContent = (val === null) || (val === undefined) ? "-" : String(val);
             tr.appendChild(td);
         }
         tbody.appendChild(tr);
