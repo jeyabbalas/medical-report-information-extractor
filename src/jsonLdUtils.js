@@ -31,6 +31,84 @@ async function buildLinkedTable(container, jsonLdDoc) {
         // Not fatal; we can still display a table, just no links for property headers
         console.warn('Error building property name → IRI map:', err);
     }
+
+    // Linked HTML table
+    const table = document.createElement("table");
+    table.style.borderCollapse = "collapse";
+    table.style.border = "1px solid #ccc";
+
+    // THEAD
+    const thead = document.createElement("thead");
+    const headerRow = document.createElement("tr");
+    for (const header of headers) {
+        const th = document.createElement("th");
+        th.style.border = "1px solid #ccc";
+        th.style.padding = "4px";
+
+        th.textContent = header;
+
+        // If we have a property IRI, hyperlink the header
+        const propIri = propertyNameIriMap[header];
+        if (
+            propIri &&
+            (propIri.startsWith("http://") || propIri.startsWith("https://"))
+        ) {
+            const link = document.createElement("a");
+            link.href = propIri;
+            link.target = "_blank";
+            link.textContent = header;
+            th.textContent = "";
+            th.appendChild(link);
+        }
+
+        headerRow.appendChild(th);
+    }
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+
+    // TBODY
+    const tbody = document.createElement("tbody");
+    for (let i = 0; i < jsonData.length; i++) {
+        const originalRow = jsonData[i];
+        const expandedRow = flattenedNodes[i] || {};
+        const tr = document.createElement("tr");
+
+        for (const header of headers) {
+            const td = document.createElement("td");
+            td.style.border = "1px solid #ccc";
+            td.style.padding = "4px";
+
+            const originalValue = originalRow[header];
+
+            const propertyIri = propertyNameIriMap[header];
+            let expandedValue = null;
+            if (propertyIri && expandedRow[propertyIri]) {
+                expandedValue = expandedRow[propertyIri];
+            }
+
+            if (originalValue === null) {
+                td.textContent = "-";
+            } else if (
+                typeof expandedValue === "string" &&
+                (expandedValue.startsWith("http://") ||
+                    expandedValue.startsWith("https://"))
+            ) {
+                const a = document.createElement("a");
+                a.href = expandedValue;
+                a.target = "_blank";
+                a.textContent = String(originalValue);
+                td.appendChild(a);
+            } else {
+                td.textContent = String(originalValue);
+            }
+
+            tr.appendChild(td);
+        }
+        tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+
+    container.appendChild(table);
 }
 
 
@@ -39,17 +117,17 @@ async function buildLinkedTable(container, jsonLdDoc) {
  * by expanding a minimal snippet once per distinct property.
  *
  * @param context - The JSON-LD context object
- * @param distinctProps - Array of distinct property names from @graph
+ * @param properties - Array of distinct property names from @graph
  * @returns {Promise<{}>}
  */
-async function buildPropertyNameIriMap(context, distinctProps) {
+async function buildPropertyNameIriMap(context, properties) {
     const map = {};
-    for (const prop of distinctProps) {
+    for (const property of properties) {
         // Minimal JSON-LD snippet
         const doc = {
             '@context': context,
             '@id': '_:dummy',
-            [prop]: 'dummy_value'
+            [property]: 'dummy_value'
         };
         try {
             const expanded = await jsonld.expand(doc);
@@ -57,15 +135,15 @@ async function buildPropertyNameIriMap(context, distinctProps) {
                 const node = expanded[0];
                 for (const key of Object.keys(node)) {
                     if (key !== '@id') {
-                        map[prop] = key;
+                        map[property] = key;
                         break;
                     }
                 }
             }
         } catch (err) {
             // Failed expansion. The property might be unknown or misdeclared?
-            console.warn(`Could not expand property "${prop}"`, err);
-            map[prop] = null;
+            console.warn(`Could not expand property "${property}"`, err);
+            map[property] = null;
         }
     }
     return map;
@@ -146,4 +224,4 @@ function buildPlainTable(data, headers) {
 }
 
 
-export { buildLinkedTable };
+export {buildLinkedTable};
