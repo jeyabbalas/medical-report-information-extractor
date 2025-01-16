@@ -1,15 +1,11 @@
 {
   "@context": {
-    "snomed": "https://browser.ihtsdotools.org/?perspective=full&edition=MAIN/2024-06-01&release=&languages=en&latestRedirect=false&conceptId1=",
-    "ncim": "https://ncimetathesaurus.nci.nih.gov/ncimbrowser/ConceptReport.jsp?dictionary=NCI%20Metathesaurus&code=",
-    "id": {
-      "@id": "https://example.org/generations-study/subjects/",
-      "@container": "@id"
-    },
+    "snomed": "http://snomed.info/id/",
+    "ncim": "https://evsexplore.semantics.cancer.gov/evsexplore/concept/ncim/",
     "her2IhcScore": {
       "@id": "ncim:CL1778287",
-      "@type": "@id",
-      "@vocab": {
+      "@type": "@vocab",
+      "@context": {
         "0": "ncim:CL545334",
         "1+": "ncim:CL545335",
         "2+": "ncim:CL545336",
@@ -18,8 +14,8 @@
     },
     "her2Status": {
       "@id": "snomed:3550001000004108",
-      "@type": "@id",
-      "@vocab": {
+      "@type": "@vocab",
+      "@context": {
         "N": "snomed:431396003",
         "B": "snomed:371932001",
         "P": "snomed:427685000",
@@ -28,8 +24,8 @@
     },
     "her2FISH": {
       "@id": "snomed:434363004",
-      "@type": "@id",
-      "@vocab": {
+      "@type": "@vocab",
+      "@context": {
         "A": "snomed:1162602001",
         "N": "snomed:705105000",
         "P": "ncim:CL539497",

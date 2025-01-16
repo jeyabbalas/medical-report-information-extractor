@@ -1,62 +1,58 @@
 {
   "@context": {
-    "snomed": "https://browser.ihtsdotools.org/?perspective=full&edition=MAIN/2024-06-01&release=&languages=en&latestRedirect=false&conceptId1=",
-    "id": {
-      "@id": "https://example.org/generations-study/subjects/",
-      "@container": "@id"
-    },
+    "snomed": "http://snomed.info/id/",
     "cis": {
       "@id": "snomed:189336000",
-      "@type": "@id",
-      "@vocab": {
+      "@type": "@vocab",
+      "@context": {
         "P": "snomed:52101004",
         "N": "snomed:2667000"
       }
     },
     "dcis": {
       "@id": "snomed:109889007",
-      "@type": "@id",
-      "@vocab": {
+      "@type": "@vocab",
+      "@context": {
         "P": "snomed:52101004",
         "N": "snomed:2667000"
       }
     },
     "lcis": {
       "@id": "snomed:109888004",
-      "@type": "@id",
-      "@vocab": {
+      "@type": "@vocab",
+      "@context": {
         "P": "snomed:52101004",
         "N": "snomed:2667000"
       }
     },
     "pleomorphicLCIS": {
       "@id": "snomed:762260000",
-      "@type": "@id",
-      "@vocab": {
+      "@type": "@vocab",
+      "@context": {
         "P": "snomed:52101004",
         "N": "snomed:2667000"
       }
     },
     "pagetsDisease": {
       "@id": "snomed:2985005",
-      "@type": "@id",
-      "@vocab": {
+      "@type": "@vocab",
+      "@context": {
         "P": "snomed:52101004",
         "N": "snomed:2667000"
       }
     },
     "microinvasion": {
       "@id": "snomed:443933007",
-      "@type": "@id",
-      "@vocab": {
+      "@type": "@vocab",
+      "@context": {
         "P": "snomed:52101004",
         "N": "snomed:2667000"
       }
     },
     "invasiveCarcinoma": {
       "@id": "snomed:713609000",
-      "@type": "@id",
-      "@vocab": {
+      "@type": "@vocab",
+      "@context": {
         "P": "snomed:52101004",
         "N": "snomed:2667000"
       }

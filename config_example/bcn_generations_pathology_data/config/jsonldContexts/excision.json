@@ -1,15 +1,11 @@
 {
   "@context": {
-    "snomed": "https://browser.ihtsdotools.org/?perspective=full&edition=MAIN/2024-06-01&release=&languages=en&latestRedirect=false&conceptId1=",
-    "id": {
-      "@id": "https://example.org/generations-study/subjects/",
-      "@container": "@id"
-    },
+    "snomed": "http://snomed.info/id/",
     "closestRelevantMargin": "snomed:371489008",
     "excisionMargin": {
       "@id": "snomed:395536008",
-      "@type": "@id",
-      "@vocab": {
+      "@type": "@vocab",
+      "@context": {
         "RRM": "snomed:370109009",
         "NRM": "snomed:310342002"
       }

@@ -1,16 +1,12 @@
 {
   "@context": {
-    "snomed": "https://browser.ihtsdotools.org/?perspective=full&edition=MAIN/2024-06-01&release=&languages=en&latestRedirect=false&conceptId1=",
-    "ncim": "https://ncimetathesaurus.nci.nih.gov/ncimbrowser/ConceptReport.jsp?dictionary=NCI%20Metathesaurus&code=",
+    "snomed": "http://snomed.info/id/",
+    "ncim": "https://evsexplore.semantics.cancer.gov/evsexplore/concept/ncim/",
     "custom": "https://example.org/generations-study/custom-ontology#",
-    "id": {
-      "@id": "https://example.org/generations-study/subjects/",
-      "@container": "@id"
-    },
     "erScoreType": {
       "@id": "custom:erScoreType",
-      "@type": "@id",
-      "@vocab": {
+      "@type": "@vocab",
+      "@context": {
         "QS": "snomed:445104009",
         "IP": "ncim:CL504588",
         "MD": "custom:erScoreType-mitchDowsett",
@@ -20,8 +16,8 @@
     },
     "erStatus": {
       "@id": "snomed:445028008",
-      "@type": "@id",
-      "@vocab": {
+      "@type": "@vocab",
+      "@context": {
         "P": "snomed:416053008",
         "N": "snomed:441117001",
         "NP": "snomed:262008008"
@@ -29,8 +25,8 @@
     },
     "prScoreType": {
       "@id": "custom:prScoreType",
-      "@type": "@id",
-      "@vocab": {
+      "@type": "@vocab",
+      "@context": {
         "QS": "snomed:445104009",
         "IP": "ncim:CL504588",
         "MD": "custom:prScoreType-mitchDowsett",
@@ -40,8 +36,8 @@
     },
     "prStatus": {
       "@id": "snomed:445029000",
-      "@type": "@id",
-      "@vocab": {
+      "@type": "@vocab",
+      "@context": {
         "P": "snomed:416561008",
         "N": "snomed:441118006",
         "NP": "snomed:262008008"
