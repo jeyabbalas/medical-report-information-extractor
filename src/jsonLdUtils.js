@@ -3,8 +3,6 @@ import jsonld from 'https://esm.sh/jsonld@8.3.3';
 
 async function buildLinkedTable(container, jsonLdDoc) {
     container.innerHTML = "";
-    const tableWrapper = document.createElement('div');
-    tableWrapper.className = 'relative overflow-x-auto shadow-md sm:rounded-lg my-4 w-full';
 
     // JSON dataset
     const jsonData = jsonLdDoc["@graph"] || [];
@@ -17,6 +15,8 @@ async function buildLinkedTable(container, jsonLdDoc) {
         expandedDoc = await jsonld.expand(jsonLdDoc);
     } catch (err) {
         console.error("Error expanding JSON-LD:", err);
+        const tableWrapper = document.createElement('div');
+        tableWrapper.className = 'relative overflow-x-auto shadow-md sm:rounded-lg my-4 w-full';
         tableWrapper.appendChild(buildPlainTable(jsonData, headers));
         container.appendChild(tableWrapper);
         return;
@@ -36,6 +36,9 @@ async function buildLinkedTable(container, jsonLdDoc) {
     }
 
     // Linked HTML table
+    const tableWrapper = document.createElement('div');
+    tableWrapper.className = 'relative overflow-x-auto shadow-md sm:rounded-lg my-4 w-full';
+
     const table = document.createElement("table");
     table.className = 'w-full text-sm text-left';
     table.style.color = 'rgb(132, 204, 22)';
@@ -261,4 +264,4 @@ function buildPlainTable(data, headers) {
 }
 
 
-export {buildLinkedTable};
+export {buildLinkedTable, buildPlainTable};
