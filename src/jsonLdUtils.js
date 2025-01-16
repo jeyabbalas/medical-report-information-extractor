@@ -35,7 +35,7 @@ async function buildLinkedTable(container, jsonLdDoc) {
 
     // Table wrappers
     const outerWrapper = document.createElement('div');
-    outerWrapper.className = 'h-96 w-full'; // fixed table height
+    outerWrapper.className = 'min-h-fit max-h-96 w-full' // fixed max table height
     const shadowWrapper = document.createElement('div');
     shadowWrapper.className = 'shadow-md rounded-lg h-full'; // shadow and rounded corners
     const tableWrapper = document.createElement('div');
@@ -239,7 +239,7 @@ function flattenExpandedNode(expandedNode) {
 function buildPlainTable(data, headers) {
     // Table wrappers
     const outerWrapper = document.createElement('div');
-    outerWrapper.className = 'h-96 w-full'; // fixed table height
+    outerWrapper.className = 'min-h-fit max-h-96 w-full' // fixed max table height
     const shadowWrapper = document.createElement('div');
     shadowWrapper.className = 'shadow-md rounded-lg h-full'; // shadow and rounded corners
     const tableWrapper = document.createElement('div');
