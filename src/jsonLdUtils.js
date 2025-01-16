@@ -15,10 +15,7 @@ async function buildLinkedTable(container, jsonLdDoc) {
         expandedDoc = await jsonld.expand(jsonLdDoc);
     } catch (err) {
         console.error("Error expanding JSON-LD:", err);
-        const tableWrapper = document.createElement('div');
-        tableWrapper.className = 'relative overflow-x-auto shadow-md sm:rounded-lg my-4 w-full';
-        tableWrapper.appendChild(buildPlainTable(jsonData, headers));
-        container.appendChild(tableWrapper);
+        container.appendChild(buildPlainTable(jsonData, headers));
         return;
     }
 
@@ -35,17 +32,25 @@ async function buildLinkedTable(container, jsonLdDoc) {
         console.warn('Error building property name → IRI map:', err);
     }
 
-    // Linked HTML table
-    const tableWrapper = document.createElement('div');
-    tableWrapper.className = 'relative overflow-x-auto shadow-md sm:rounded-lg my-4 w-full';
 
+    // Table wrappers
+    const outerWrapper = document.createElement('div');
+    outerWrapper.className = 'h-96 w-full'; // fixed table height
+    const shadowWrapper = document.createElement('div');
+    shadowWrapper.className = 'shadow-md rounded-lg h-full'; // shadow and rounded corners
+    const tableWrapper = document.createElement('div');
+    tableWrapper.className = 'relative overflow-auto h-full rounded-lg border border-gray-200'; // scrollable
+    const stickyWrapper = document.createElement('div');
+    stickyWrapper.className = 'relative'; // sticky header
+
+    // Linked HTML table
     const table = document.createElement("table");
-    table.className = 'w-full text-sm text-left';
+    table.className = 'w-full text-sm text-left min-w-full table-auto';
     table.style.color = 'rgb(132, 204, 22)';
 
     // THEAD
     const thead = document.createElement("thead");
-    thead.className = 'text-xs uppercase';
+    thead.className = 'text-xs uppercase sticky top-0 z-10';
     thead.style.backgroundColor = 'rgb(20, 83, 45)';
     thead.style.color = 'white';
 
@@ -53,7 +58,7 @@ async function buildLinkedTable(container, jsonLdDoc) {
     for (const header of headers) {
         const th = document.createElement("th");
         th.scope = 'col';
-        th.className = 'px-6 py-3';
+        th.className = 'px-6 py-3 whitespace-nowrap';
 
         // If we have a property IRI, hyperlink the header
         const propIri = propertyNameIriMap[header];
@@ -79,13 +84,14 @@ async function buildLinkedTable(container, jsonLdDoc) {
 
     // TBODY
     const tbody = document.createElement("tbody");
+    tbody.className = 'divide-y divide-gray-200';
+
     for (let i = 0; i < jsonData.length; i++) {
         const originalRow = jsonData[i];
         const expandedRow = flattenedNodes[i] || {};
         const tr = document.createElement("tr");
         tr.className = 'bg-white border-b';
         tr.style.setProperty('--tw-hover-bg-opacity', '0.05');
-        tr.style.setProperty('--lime-50', 'rgb(247, 254, 231)');
 
         tr.addEventListener('mouseenter', () => {
             tr.style.backgroundColor = 'rgb(247, 254, 231)';
@@ -96,7 +102,7 @@ async function buildLinkedTable(container, jsonLdDoc) {
 
         for (const header of headers) {
             const td = document.createElement("td");
-            td.className = 'px-4 py-2';
+            td.className = 'px-4 py-2 whitespace-nowrap';
 
             const originalValue = originalRow[header];
             const propertyIri = propertyNameIriMap[header];
@@ -128,10 +134,10 @@ async function buildLinkedTable(container, jsonLdDoc) {
                 a.style.color = 'rgb(101, 163, 13)';
                 a.textContent = String(originalValue);
                 a.addEventListener('mouseenter', () => {
-                    a.style.color = 'rgb(77, 124, 15)'; // lime-800
+                    a.style.color = 'rgb(77, 124, 15)';
                 });
                 a.addEventListener('mouseleave', () => {
-                    a.style.color = 'rgb(101, 163, 13)'; // lime-600
+                    a.style.color = 'rgb(101, 163, 13)';
                 });
                 td.appendChild(a);
             } else {
@@ -147,8 +153,12 @@ async function buildLinkedTable(container, jsonLdDoc) {
     }
     table.appendChild(tbody);
 
-    tableWrapper.appendChild(table);
-    container.appendChild(tableWrapper);
+    // Wrap up
+    stickyWrapper.appendChild(table);
+    tableWrapper.appendChild(stickyWrapper);
+    shadowWrapper.appendChild(tableWrapper);
+    outerWrapper.appendChild(shadowWrapper);
+    container.appendChild(outerWrapper);
 }
 
 
@@ -224,20 +234,31 @@ function flattenExpandedNode(expandedNode) {
  *
  * @param data - JSON dataset (array of objects)
  * @param headers - Array of header names
- * @returns {HTMLTableElement}
+ * @returns {HTMLDivElement}
  */
 function buildPlainTable(data, headers) {
+    // Table wrappers
+    const outerWrapper = document.createElement('div');
+    outerWrapper.className = 'h-96 w-full'; // fixed table height
+    const shadowWrapper = document.createElement('div');
+    shadowWrapper.className = 'shadow-md rounded-lg h-full'; // shadow and rounded corners
+    const tableWrapper = document.createElement('div');
+    tableWrapper.className = 'relative overflow-auto h-full rounded-lg border border-gray-200'; // scrollable
+    const stickyWrapper = document.createElement('div');
+    stickyWrapper.className = 'relative'; // sticky header
+
+    // Plain HTML table
     const table = document.createElement("table");
-    table.className = 'w-full text-sm text-left text-gray-500';
+    table.className = 'w-full text-sm text-left min-w-full table-auto text-gray-500';
 
     // THEAD
     const thead = document.createElement("thead");
-    thead.className = 'text-xs text-white uppercase bg-green-900';
+    thead.className = 'text-xs text-white uppercase sticky top-0 z-10 bg-green-900';
     const headerRow = document.createElement("tr");
     for (const header of headers) {
         const th = document.createElement("th");
         th.scope = 'col';
-        th.className = 'px-6 py-3';
+        th.className = 'px-6 py-3 whitespace-nowrap';
         th.textContent = header;
         headerRow.appendChild(th);
     }
@@ -246,21 +267,47 @@ function buildPlainTable(data, headers) {
 
     // TBODY
     const tbody = document.createElement("tbody");
+    tbody.className = 'divide-y divide-gray-200';
+
     for (const row of data) {
         const tr = document.createElement("tr");
         tr.className = 'bg-white border-b hover:bg-green-50';
         for (const header of headers) {
             const td = document.createElement("td");
-            td.className = 'px-4 py-2';
+            td.className = 'px-4 py-2 whitespace-nowrap';
+
             const val = row[header];
-            td.textContent = (val === null) || (val === undefined) ? "-" : String(val);
+            if (val === null || val === undefined) {
+                const span = document.createElement('span');
+                span.className = 'text-gray-500';
+                span.textContent = '-';
+                td.appendChild(span);
+            } else if (Array.isArray(val) || typeof val === 'object') {
+                const span = document.createElement('span');
+                span.className = 'font-mono text-sm';
+                span.style.color = 'rgb(75, 85, 99)'; // gray-600
+                span.textContent = JSON.stringify(val);
+                td.appendChild(span);
+            } else {
+                const span = document.createElement('span');
+                span.className = 'text-gray-800';
+                span.textContent = String(val);
+                td.appendChild(span);
+            }
+
             tr.appendChild(td);
         }
         tbody.appendChild(tr);
     }
     table.appendChild(tbody);
 
-    return table;
+    // Wrap up
+    stickyWrapper.appendChild(table);
+    tableWrapper.appendChild(stickyWrapper);
+    shadowWrapper.appendChild(tableWrapper);
+    outerWrapper.appendChild(shadowWrapper);
+
+    return outerWrapper;
 }
 
 
