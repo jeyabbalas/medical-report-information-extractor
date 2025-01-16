@@ -42,9 +42,9 @@ async function buildLinkedTable(container, jsonLdDoc) {
 
     // THEAD
     const thead = document.createElement("thead");
-    thead.className = 'text-xs uppercase underline';
+    thead.className = 'text-xs uppercase';
     thead.style.backgroundColor = 'rgb(20, 83, 45)';
-    thead.style.color = 'rgb(190, 242, 100)';
+    thead.style.color = 'white';
 
     const headerRow = document.createElement("tr");
     for (const header of headers) {
@@ -63,7 +63,7 @@ async function buildLinkedTable(container, jsonLdDoc) {
             link.target = "_blank";
             link.textContent = header;
             link.className = 'underline';
-            link.style.color = 'inherit';
+            link.style.color = 'rgb(190, 242, 100)';
             th.appendChild(link);
         } else {
             th.textContent = header;
