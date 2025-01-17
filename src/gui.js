@@ -15,7 +15,7 @@ function ui(divID) {
 `;
 
     const sourceCodeUrl = "https://github.com/jeyabbalas/medical-report-information-extractor";
-    const configFileDefault = "https://raw.githubusercontent.com/jeyabbalas/medical-report-information-extractor/refs/heads/main/config_example/bcn_generations_pathology_data/config.json";
+    const configFileDefault = "https://raw.githubusercontent.com/jeyabbalas/medical-report-information-extractor/refs/heads/main/examples/bcn_generations_pathology_data/config.json";
     const llmBaseUrlDefault = "https://api.openai.com/v1";
 
     divUI.innerHTML = `

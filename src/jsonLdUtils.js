@@ -1,6 +1,44 @@
 import jsonld from 'https://esm.sh/jsonld@8.3.3';
 
 
+/**
+ * Checks if a JSON-LD object is valid by:
+ *   1) Verifying it has an "@context" key.
+ *   2) Attempting to expand it using jsonld.js.
+ *
+ * @param jsonLdDoc - The JSON-LD object
+ * @returns {Promise<{valid: boolean, error: string}|{valid: boolean, error: null}>}
+ *          - { valid: true, error: null } if it's valid
+ *          - { valid: false, error: "some message" } if it's invalid
+ */
+async function validateJsonLd(jsonLdDoc) {
+    // "@context" key is mandatory for this app.
+    if (
+        !jsonLdDoc ||
+        typeof jsonLdDoc !== "object" ||
+        !("@context" in jsonLdDoc)
+    ) {
+        return {
+            valid: false,
+            error: "Missing @context."
+        };
+    }
+
+    try {
+        await jsonld.expand(jsonLdDoc);
+        return {
+            valid: true,
+            error: null
+        };
+    } catch (err) {
+        return {
+            valid: false,
+            error: `Invalid JSON-LD context or data: ${err.message}`
+        };
+    }
+}
+
+
 async function buildLinkedTable(container, jsonLdDoc) {
     container.innerHTML = "";
 
@@ -311,42 +349,4 @@ function buildPlainTable(data, headers) {
 }
 
 
-/**
- * Checks if a JSON-LD object is valid by:
- *   1) Verifying it has an "@context" key.
- *   2) Attempting to expand it using jsonld.js.
- *
- * @param jsonLdDoc - The JSON-LD object
- * @returns {Promise<{valid: boolean, error: string}|{valid: boolean, error: null}>}
- *          - { valid: true, error: null } if it's valid
- *          - { valid: false, error: "some message" } if it's invalid
- */
-async function validateJsonLd(jsonLdDoc) {
-    // "@context" key is mandatory for this app.
-    if (
-        !jsonLdDoc ||
-        typeof jsonLdDoc !== "object" ||
-        !("@context" in jsonLdDoc)
-    ) {
-        return {
-            valid: false,
-            error: "Missing @context."
-        };
-    }
-
-    try {
-        await jsonld.expand(jsonLdDoc);
-        return {
-            valid: true,
-            error: null
-        };
-    } catch (err) {
-        return {
-            valid: false,
-            error: `Invalid JSON-LD context or data: ${err.message}`
-        };
-    }
-}
-
-
-export {buildLinkedTable, buildPlainTable, validateJsonLd};
+export {validateJsonLd, buildLinkedTable, buildPlainTable};
