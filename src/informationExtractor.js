@@ -1,8 +1,11 @@
-const manageOpenAIApiKey = {
-    async validateApiKey(baseURL, apiKey) {
+import {OpenAI} from 'https://cdn.skypack.dev/openai@4.78.1?min';
+
+
+const manageOpenAiApiKey = {
+    async validateApiKey(baseUrl, apiKey) {
         try {
             const openai = new OpenAI({
-                baseURL: baseURL,
+                baseURL: baseUrl,
                 apiKey: apiKey,
                 dangerouslyAllowBrowser: true
             });
@@ -33,4 +36,4 @@ const manageOpenAIApiKey = {
 };
 
 
-export { manageOpenAIApiKey };
+export { manageOpenAiApiKey };
