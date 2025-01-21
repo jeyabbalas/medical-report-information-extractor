@@ -1,9 +1,9 @@
 import {ui} from './src/gui.js';
 import {validateJsonSchema} from './src/jsonSchemaUtils.js';
-import {validateJsonLd, buildPlainTable, buildLinkedTable,} from "./src/jsonLdUtils.js";
-import {manageOpenAiApiKey} from "./src/informationExtractor.js";
+import {validateJsonLd, buildPlainTable, buildLinkedTable} from "./src/jsonLdUtils.js";
 
 import {openDB} from 'https://cdn.jsdelivr.net/npm/idb@8/+esm'
+import {OpenAI} from 'https://cdn.skypack.dev/openai@4.78.1?min';
 
 
 function setConfigErrorMessage(errorText) {
@@ -64,7 +64,7 @@ async function copyConfigErrorMessage() {
         setTimeout(() => {
             copyBtn.className = originalClasses;
             buttonText.textContent = 'Copy';
-        }, 2000);
+        }, 1000);
     } catch (err) {
         copyBtn.className = 'copy-error-button absolute top-2 right-2 bg-white text-red-600 border border-red-400 rounded px-2 py-1 text-xs flex items-center gap-1';
         buttonText.textContent = '!';
@@ -72,7 +72,7 @@ async function copyConfigErrorMessage() {
         setTimeout(() => {
             copyBtn.className = originalClasses;
             buttonText.textContent = 'Copy';
-        }, 2000);
+        }, 1000);
     }
 }
 
@@ -198,7 +198,7 @@ async function loadConfig(configUrl) {
     }
 
     // Success!
-    setConfigErrorMessage('✓ Config loaded successfully!');
+    setConfigErrorMessage('✓ Configuration files loaded successfully!');
     const container = document.getElementById('config-error-message-container');
     if (container) {
         container.querySelector('.relative').classList.remove('bg-red-50', 'text-red-800', 'border-red-300');
@@ -207,26 +207,178 @@ async function loadConfig(configUrl) {
 }
 
 
-/**
- *  - Check if there's a ?configUrl param.
- *  - If yes, load config.
- *  - Else, if #config-url has a default value, load config from that.
- * Then attach listener for #config-url changes.
- */
+function setApiKeyMessage(message, isSuccess = false) {
+    const container = document.getElementById('api-key-message-container');
+    if (!container) return;
+
+    container.className = 'p-3 text-sm rounded-lg border my-2';
+
+    if (isSuccess) {
+        container.classList.add('bg-green-50', 'text-green-800', 'border-green-300');
+    } else {
+        container.classList.add('bg-red-50', 'text-red-800', 'border-red-300');
+    }
+    container.textContent = message;
+}
+
+
+function clearApiKeyMessage() {
+    const container = document.getElementById('api-key-message-container');
+    if (!container) return;
+    container.textContent = '';
+    container.className = 'hidden';
+}
+
+
+async function validateOpenAiApiKey(baseUrl, apiKey) {
+    try {
+        const openai = new OpenAI({
+            baseURL: baseUrl,
+            apiKey: apiKey,
+            dangerouslyAllowBrowser: true
+        });
+        await openai.models.list();
+        return true;
+    } catch (error) {
+        if (error.response && error.response.status === 401) {
+            console.error('Invalid API key:', error);
+            return false;
+        } else {
+            console.error('Error checking API key:', error);
+            return false;
+        }
+    }
+}
+
+
+async function initOpenAiCredentials() {
+    try {
+        const db = await openDB('medical-report-information-extractor-db', 1, {
+            upgrade(db) {
+                if (!db.objectStoreNames.contains('config')) {
+                    db.createObjectStore('config', {keyPath: 'id'});
+                }
+            }
+        });
+
+        const storedCreds = await db.get('config', 'openAiCreds');
+        if (!storedCreds) {
+            // No credentials stored
+            return;
+        }
+
+        // Populate fields
+        const baseUrlField = document.getElementById('llm-base-url');
+        const apiKeyField = document.getElementById('llm-api-key');
+
+        if (baseUrlField && apiKeyField) {
+            baseUrlField.value = storedCreds.baseUrl ?? '';
+            apiKeyField.value = storedCreds.apiKey ?? '';
+
+            // Attempt validation
+            const isValid = await validateOpenAiApiKey(storedCreds.baseUrl, storedCreds.apiKey);
+            if (isValid) {
+                setApiKeyMessage('✓ OpenAI API key is valid.', true);
+            } else {
+                setApiKeyMessage('OpenAI API key appears to be invalid.', false);
+            }
+        }
+    } catch (err) {
+        console.error('Error retrieving OpenAI credentials from IDB:', err);
+    }
+}
+
+
+async function submitOpenAiCredentials() {
+    clearApiKeyMessage();
+
+    // Gather values from form
+    const baseUrlField = document.getElementById('llm-base-url');
+    const apiKeyField = document.getElementById('llm-api-key');
+    if (!baseUrlField || !apiKeyField) {
+        setApiKeyMessage('Missing input fields for base URL or API key.', false);
+        return;
+    }
+
+    const baseUrl = baseUrlField.value.trim();
+    const apiKey = apiKeyField.value.trim();
+
+    if (!baseUrl || !apiKey) {
+        setApiKeyMessage('Please provide both Base URL and API key.', false);
+        return;
+    }
+
+    // Validate
+    const isValid = await validateOpenAiApiKey(baseUrl, apiKey);
+    if (!isValid) {
+        setApiKeyMessage('Invalid API credentials. Please check your base URL and key.', false);
+        return;
+    }
+
+    // If valid, store in IDB
+    try {
+        const db = await openDB('medical-report-information-extractor-db', 1, {
+            upgrade(db) {
+                if (!db.objectStoreNames.contains('config')) {
+                    db.createObjectStore('config', {keyPath: 'id'});
+                }
+            }
+        });
+        const credsToStore = {
+            id: 'openAiCreds',
+            baseUrl,
+            apiKey
+        };
+        await db.put('config', credsToStore);
+
+        setApiKeyMessage('✓ Your OpenAI credentials are valid and have been saved successfully!', true);
+    } catch (err) {
+        setApiKeyMessage(`Error saving credentials: ${err.message}`, false);
+    }
+}
+
+
+async function forgetOpenAiCredentials() {
+    clearApiKeyMessage();
+    try {
+        const db = await openDB('medical-report-information-extractor-db', 1, {
+            upgrade(db) {
+                if (!db.objectStoreNames.contains('config')) {
+                    db.createObjectStore('config', {keyPath: 'id'});
+                }
+            }
+        });
+        await db.delete('config', 'openAiCreds');
+
+        // Clear input fields
+        const baseUrlField = document.getElementById('llm-base-url');
+        const apiKeyField = document.getElementById('llm-api-key');
+        if (baseUrlField) baseUrlField.value = '';
+        if (apiKeyField) apiKeyField.value = '';
+
+        setApiKeyMessage('OpenAI credentials have been removed.', true);
+    } catch (err) {
+        setApiKeyMessage(`Error removing credentials: ${err.message}`, false);
+    }
+}
+
+
 function init() {
     ui('app');
 
+    // 1. Initialize OpenAI credentials from IDB if available
+    initOpenAiCredentials();
+
+    // 2. If there's a ?configUrl param or a default value in #config-url, load config
     const urlParams = new URLSearchParams(window.location.search);
     let paramUrl = urlParams.get('configUrl');
     const configInputEl = document.getElementById('config-url');
     if (!configInputEl) return;
 
     if (paramUrl) {
-        // Config URL param is present
         configInputEl.value = paramUrl;
         loadConfig(paramUrl);
     } else if (configInputEl.value) {
-        // #config-url input has a prefilled value
         paramUrl = configInputEl.value;
         const newUrl = new URL(window.location);
         newUrl.searchParams.set('configUrl', paramUrl);
@@ -241,8 +393,17 @@ function init() {
         window.history.replaceState({}, '', currentUrl.toString());
         loadConfig(newConfigUrl);
     });
+
+    // 3. Wire up "Submit API key" and "Forget API key"
+    const submitApiKeyBtn = document.getElementById('submit-api-key');
+    const forgetApiKeyBtn = document.getElementById('forget-api-key');
+    if (submitApiKeyBtn) {
+        submitApiKeyBtn.addEventListener('click', submitOpenAiCredentials);
+    }
+    if (forgetApiKeyBtn) {
+        forgetApiKeyBtn.addEventListener('click', forgetOpenAiCredentials);
+    }
 }
 
 
 document.addEventListener('DOMContentLoaded', init);
-//import {OpenAI} from 'https://cdn.skypack.dev/openai@4.78.1?min';
