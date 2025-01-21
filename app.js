@@ -6,6 +6,8 @@ import {openDB} from 'https://cdn.jsdelivr.net/npm/idb@8/+esm'
 import {OpenAI} from 'https://cdn.skypack.dev/openai@4.78.1?min';
 
 
+let openaiClient = null;
+
 function setConfigErrorMessage(errorText) {
     const errorContainer = document.getElementById('config-error-message-container');
     if (!errorContainer) return;
@@ -285,12 +287,12 @@ function clearApiKeyMessage() {
 
 async function validateOpenAiApiKey(baseUrl, apiKey) {
     try {
-        const openai = new OpenAI({
+        const testClient = new OpenAI({
             baseURL: baseUrl,
             apiKey: apiKey,
             dangerouslyAllowBrowser: true
         });
-        await openai.models.list();
+        await testClient.models.list();
         return true;
     } catch (error) {
         if (error.response && error.response.status === 401) {
@@ -300,6 +302,101 @@ async function validateOpenAiApiKey(baseUrl, apiKey) {
             console.error('Error checking API key:', error);
             return false;
         }
+    }
+}
+
+
+async function createGlobalOpenAiClient(baseUrl, apiKey) {
+    openaiClient = new OpenAI({
+        baseURL: baseUrl,
+        apiKey: apiKey,
+        dangerouslyAllowBrowser: true
+    });
+
+    await populateModelsDropdown();
+}
+
+
+async function populateModelsDropdown() {
+    if (!openaiClient) return;
+    const selectEl = document.getElementById('llm-model');
+    if (!selectEl) return;
+
+    // Clear existing dropdown
+    selectEl.innerHTML = '';
+
+    try {
+        const resp = await openaiClient.models.list();
+        const modelIds = resp.data.map((m) => m.id).sort();
+
+        if (!modelIds.length) {
+            selectEl.innerHTML = `<option disabled selected>No models found</option>`;
+            return;
+        }
+
+        const db = await openDB('medical-report-information-extractor-db', 1, {
+            upgrade(db) {
+                if (!db.objectStoreNames.contains('config')) {
+                    db.createObjectStore('config', {keyPath: 'id'});
+                }
+            }
+        });
+        const storedModel = await db.get('config', 'model');
+
+        for (const modelId of modelIds) {
+            const opt = document.createElement('option');
+            opt.value = modelId;
+            opt.textContent = modelId;
+            selectEl.appendChild(opt);
+        }
+
+        let modelToSelect = '';
+
+        if (storedModel && storedModel.name && modelIds.includes(storedModel.name)) {
+            modelToSelect = storedModel.name;
+        } else if (modelIds.includes('gpt-4o')) {
+            modelToSelect = 'gpt-4o';
+        } else {
+            modelToSelect = modelIds[0];
+        }
+
+        selectEl.value = modelToSelect;
+
+        if (!storedModel || storedModel.name !== modelToSelect) {
+            await storeSelectedModelInIdb(modelToSelect);
+        }
+    } catch (error) {
+        console.error('Error populating model dropdown:', error);
+        selectEl.innerHTML = `<option disabled selected>Could not load models</option>`;
+    }
+}
+
+
+async function storeSelectedModelInIdb(modelName) {
+    const db = await openDB('medical-report-information-extractor-db', 1, {
+        upgrade(db) {
+            if (!db.objectStoreNames.contains('config')) {
+                db.createObjectStore('config', {keyPath: 'id'});
+            }
+        }
+    });
+    const record = {
+        id: 'model',
+        name: modelName
+    };
+    await db.put('config', record);
+}
+
+
+async function handleModelSelectionChange() {
+    const selectEl = document.getElementById('llm-model');
+    if (!selectEl) return;
+    const newModel = selectEl.value;
+    try {
+        await storeSelectedModelInIdb(newModel);
+        console.log('Model selection updated:', newModel);
+    } catch (err) {
+        console.error('Error storing model selection:', err);
     }
 }
 
@@ -316,7 +413,6 @@ async function initOpenAiCredentials() {
 
         const storedCreds = await db.get('config', 'openAiCreds');
         if (!storedCreds) {
-            // No credentials stored
             return;
         }
 
@@ -331,9 +427,13 @@ async function initOpenAiCredentials() {
             // Attempt validation
             const isValid = await validateOpenAiApiKey(storedCreds.baseUrl, storedCreds.apiKey);
             if (isValid) {
+                await createGlobalOpenAiClient(storedCreds.baseUrl, storedCreds.apiKey);
                 setApiKeyMessage('✓ OpenAI API key is valid.', true);
             } else {
                 setApiKeyMessage('OpenAI API key appears to be invalid.', false);
+                await clearOpenAiCredentialsFromIdb();
+                await clearModelSelectionFromIdb();
+                clearModelsDropdown();
             }
         }
     } catch (err) {
@@ -345,7 +445,6 @@ async function initOpenAiCredentials() {
 async function submitOpenAiCredentials() {
     clearApiKeyMessage();
 
-    // Gather values from form
     const baseUrlField = document.getElementById('llm-base-url');
     const apiKeyField = document.getElementById('llm-api-key');
     if (!baseUrlField || !apiKeyField) {
@@ -361,14 +460,15 @@ async function submitOpenAiCredentials() {
         return;
     }
 
-    // Validate
     const isValid = await validateOpenAiApiKey(baseUrl, apiKey);
     if (!isValid) {
         setApiKeyMessage('Invalid API credentials. Please check your base URL and key.', false);
+        clearModelsDropdown();
+        await clearOpenAiCredentialsFromIdb();
+        await clearModelSelectionFromIdb();
         return;
     }
 
-    // If valid, store in IDB
     try {
         const db = await openDB('medical-report-information-extractor-db', 1, {
             upgrade(db) {
@@ -384,6 +484,8 @@ async function submitOpenAiCredentials() {
         };
         await db.put('config', credsToStore);
 
+        await createGlobalOpenAiClient(baseUrl, apiKey);
+
         setApiKeyMessage('✓ Your OpenAI credentials are valid and have been saved successfully!', true);
     } catch (err) {
         setApiKeyMessage(`Error saving credentials: ${err.message}`, false);
@@ -394,20 +496,17 @@ async function submitOpenAiCredentials() {
 async function forgetOpenAiCredentials() {
     clearApiKeyMessage();
     try {
-        const db = await openDB('medical-report-information-extractor-db', 1, {
-            upgrade(db) {
-                if (!db.objectStoreNames.contains('config')) {
-                    db.createObjectStore('config', {keyPath: 'id'});
-                }
-            }
-        });
-        await db.delete('config', 'openAiCreds');
+        await clearOpenAiCredentialsFromIdb();
+        await clearModelSelectionFromIdb();
 
-        // Clear input fields
         const baseUrlField = document.getElementById('llm-base-url');
         const apiKeyField = document.getElementById('llm-api-key');
         if (baseUrlField) baseUrlField.value = '';
         if (apiKeyField) apiKeyField.value = '';
+
+        clearModelsDropdown();
+
+        openaiClient = null;
 
         setApiKeyMessage('OpenAI credentials have been removed.', true);
     } catch (err) {
@@ -416,40 +515,66 @@ async function forgetOpenAiCredentials() {
 }
 
 
-function init() {
+async function clearOpenAiCredentialsFromIdb() {
+    const db = await openDB('medical-report-information-extractor-db', 1);
+    await db.delete('config', 'openAiCreds');
+}
+
+
+async function clearModelSelectionFromIdb() {
+    const db = await openDB('medical-report-information-extractor-db', 1);
+    await db.delete('config', 'model');
+}
+
+
+function clearModelsDropdown() {
+    const selectEl = document.getElementById('llm-model');
+    if (!selectEl) return;
+    selectEl.innerHTML = `<option value="" disabled selected>Set URL/API key above to see models list</option>`;
+}
+
+
+async function init() {
     ui('app');
 
-    // 1. Initialize OpenAI credentials from IDB if available
-    initOpenAiCredentials();
+    await initOpenAiCredentials();
 
-    // 2. If there's a ?configUrl param or a default value in #config-url, load config
+    // Model dropdown change listener
+    const llmModelSelect = document.getElementById('llm-model');
+    if (llmModelSelect) {
+        llmModelSelect.addEventListener('change', handleModelSelectionChange);
+    }
+
+    // Handle configuration URL input
     const urlParams = new URLSearchParams(window.location.search);
     let paramUrl = urlParams.get('configUrl');
     const configInputEl = document.getElementById('config-url');
-    if (!configInputEl) return;
 
-    if (paramUrl) {
-        configInputEl.value = paramUrl;
-        loadConfig(paramUrl);
-    } else if (configInputEl.value) {
-        paramUrl = configInputEl.value;
-        const newUrl = new URL(window.location);
-        newUrl.searchParams.set('configUrl', paramUrl);
-        window.history.replaceState({}, '', newUrl.toString());
-        loadConfig(paramUrl);
+    if (configInputEl) {
+        if (paramUrl) {
+            configInputEl.value = paramUrl;
+            await loadConfig(paramUrl);
+        } else if (configInputEl.value) {
+            paramUrl = configInputEl.value;
+            const newUrl = new URL(window.location);
+            newUrl.searchParams.set('configUrl', paramUrl);
+            window.history.replaceState({}, '', newUrl.toString());
+            await loadConfig(paramUrl);
+        }
+
+        configInputEl.addEventListener('change', async () => {
+            const newConfigUrl = configInputEl.value;
+            const currentUrl = new URL(window.location);
+            currentUrl.searchParams.set('configUrl', newConfigUrl);
+            window.history.replaceState({}, '', currentUrl.toString());
+            await loadConfig(newConfigUrl);
+        });
     }
 
-    configInputEl.addEventListener('change', () => {
-        const newConfigUrl = configInputEl.value;
-        const currentUrl = new URL(window.location);
-        currentUrl.searchParams.set('configUrl', newConfigUrl);
-        window.history.replaceState({}, '', currentUrl.toString());
-        loadConfig(newConfigUrl);
-    });
-
-    // 3. Wire up "Submit API key" and "Forget API key"
+    // Handle OpenAI API credentials form
     const submitApiKeyBtn = document.getElementById('submit-api-key');
     const forgetApiKeyBtn = document.getElementById('forget-api-key');
+
     if (submitApiKeyBtn) {
         submitApiKeyBtn.addEventListener('click', submitOpenAiCredentials);
     }
@@ -459,4 +584,6 @@ function init() {
 }
 
 
-document.addEventListener('DOMContentLoaded', init);
+document.addEventListener('DOMContentLoaded', async () => {
+  await init();
+});
