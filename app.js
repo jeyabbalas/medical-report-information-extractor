@@ -77,132 +77,185 @@ async function copyConfigErrorMessage() {
 }
 
 
+function showConfigLoadingBar() {
+    const wrapper = document.getElementById('config-loading-bar-wrapper');
+    if (wrapper) wrapper.classList.remove('hidden');
+}
+
+
+function hideConfigLoadingBar() {
+    const wrapper = document.getElementById('config-loading-bar-wrapper');
+    if (wrapper) wrapper.classList.add('hidden');
+    const bar = document.getElementById('config-loading-bar');
+    if (bar) bar.style.width = '0%';
+}
+
+
+function updateConfigLoadingBar(percent) {
+    const bar = document.getElementById('config-loading-bar');
+    if (bar) {
+        bar.style.width = `${percent}%`;
+    }
+}
+
+
 async function loadConfig(configUrl) {
     clearConfigErrorMessage();
 
-    if (!configUrl) {
-        setConfigErrorMessage('No config URL provided.');
-        return;
+    let totalFetches = 1;
+    let completedFetches = 0;
+
+    function incrementLoadingProgress() {
+        completedFetches++;
+        const progress = (completedFetches / totalFetches) * 100;
+        updateConfigLoadingBar(progress);
     }
 
-    // Config JSON
-    let configJson;
+    showConfigLoadingBar();
+
     try {
-        const resp = await fetch(configUrl);
-        if (!resp.ok) {
-            throw new Error(`Failed to fetch config.json. HTTP ${resp.status}`);
-        }
-        configJson = await resp.json();
-    } catch (err) {
-        setConfigErrorMessage(`Could not parse the config file as JSON: ${err.message}`);
-        return;
-    }
-
-    // Check config JSON format
-    const {systemPrompt, schemaFiles, jsonldContextFiles} = configJson;
-    if (!systemPrompt) {
-        setConfigErrorMessage(`config.json is missing "systemPrompt" property.`);
-        return;
-    }
-    if (schemaFiles === undefined) {
-        setConfigErrorMessage(`config.json is missing "schemaFiles" property.`);
-        return;
-    }
-    if (jsonldContextFiles === undefined) {
-        setConfigErrorMessage(`config.json is missing "jsonldContextFiles" property.`);
-        return;
-    }
-    if (typeof systemPrompt !== 'string') {
-        setConfigErrorMessage(`"systemPrompt" must be a string containing a URL.`);
-        return;
-    }
-
-    // systemPrompt file
-    let systemPromptText;
-    try {
-        const promptResp = await fetch(systemPrompt);
-        if (!promptResp.ok) {
-            throw new Error(`Failed to fetch systemPrompt file. HTTP ${promptResp.status}`);
-        }
-        systemPromptText = await promptResp.text();
-    } catch (err) {
-        setConfigErrorMessage(`Could not fetch systemPrompt text: ${err.message}`);
-        return;
-    }
-
-    // schemaFiles
-    const schemaFileUrls = Array.isArray(schemaFiles) ? schemaFiles : [schemaFiles];
-    const parsedSchemas = [];
-    for (const fileUrl of schemaFileUrls) {
-        try {
-            const schemaResp = await fetch(fileUrl);
-            if (!schemaResp.ok) {
-                throw new Error(`Failed to fetch schema file. HTTP ${schemaResp.status}`);
-            }
-            const schemaJson = await schemaResp.json();
-            const {valid, error} = await validateJsonSchema(schemaJson);
-            if (!valid) {
-                throw new Error(`Schema file at ${fileUrl} is not a valid JSON Schema: ${error}`);
-            }
-            parsedSchemas.push(schemaJson);
-        } catch (err) {
-            setConfigErrorMessage(`Could not load/validate schemaFile at "${fileUrl}": ${err.message}`);
+        if (!configUrl) {
+            setConfigErrorMessage('No config URL provided.');
             return;
         }
-    }
 
-    // jsonldContextFiles
-    const jsonldFileUrls = Array.isArray(jsonldContextFiles)
-        ? jsonldContextFiles
-        : [jsonldContextFiles];
-    const parsedJsonLds = [];
-    for (const fileUrl of jsonldFileUrls) {
+        // Config JSON
+        let configJson;
         try {
-            const jsonldResp = await fetch(fileUrl);
-            if (!jsonldResp.ok) {
-                throw new Error(`Failed to fetch JSON-LD file. HTTP ${jsonldResp.status}`);
+            const resp = await fetch(configUrl);
+            if (!resp.ok) {
+                throw new Error(`Failed to fetch config.json. HTTP ${resp.status}`);
             }
-            const jsonldDoc = await jsonldResp.json();
-            const {valid, error} = await validateJsonLd(jsonldDoc);
-            if (!valid) {
-                throw new Error(`JSON-LD file at ${fileUrl} is invalid: ${error}`);
-            }
-            parsedJsonLds.push(jsonldDoc);
+            configJson = await resp.json();
+
+            // We fetched the config, so increment progress:
+            incrementLoadingProgress();
+
         } catch (err) {
-            setConfigErrorMessage(`Could not load/validate JSON-LD file at "${fileUrl}": ${err.message}`);
+            setConfigErrorMessage(`Could not parse the config file as JSON: ${err.message}`);
             return;
         }
-    }
 
-    // Save to IndexedDB
-    try {
-        const db = await openDB('medical-report-information-extractor-db', 1, {
-            upgrade(db) {
-                if (!db.objectStoreNames.contains('config')) {
-                    db.createObjectStore('config', {keyPath: 'id'});
+        // Check config JSON format
+        const {systemPrompt, schemaFiles, jsonldContextFiles} = configJson;
+        if (!systemPrompt) {
+            setConfigErrorMessage(`config.json is missing "systemPrompt" property.`);
+            return;
+        }
+        if (schemaFiles === undefined) {
+            setConfigErrorMessage(`config.json is missing "schemaFiles" property.`);
+            return;
+        }
+        if (jsonldContextFiles === undefined) {
+            setConfigErrorMessage(`config.json is missing "jsonldContextFiles" property.`);
+            return;
+        }
+        if (typeof systemPrompt !== 'string') {
+            setConfigErrorMessage(`"systemPrompt" must be a string containing a URL.`);
+            return;
+        }
+
+        const schemaFileUrls = Array.isArray(schemaFiles) ? schemaFiles : [schemaFiles];
+        const jsonldFileUrls = Array.isArray(jsonldContextFiles)
+            ? jsonldContextFiles
+            : [jsonldContextFiles];
+        totalFetches = 1 + schemaFileUrls.length + jsonldFileUrls.length + 1;
+
+        // systemPrompt file
+        let systemPromptText;
+        try {
+            const promptResp = await fetch(systemPrompt);
+            if (!promptResp.ok) {
+                throw new Error(`Failed to fetch systemPrompt file. HTTP ${promptResp.status}`);
+            }
+            systemPromptText = await promptResp.text();
+
+            incrementLoadingProgress();
+        } catch (err) {
+            setConfigErrorMessage(`Could not fetch systemPrompt text: ${err.message}`);
+            return;
+        }
+
+        // schemaFiles
+        const parsedSchemas = [];
+        for (const fileUrl of schemaFileUrls) {
+            try {
+                const schemaResp = await fetch(fileUrl);
+                if (!schemaResp.ok) {
+                    throw new Error(`Failed to fetch schema file. HTTP ${schemaResp.status}`);
                 }
+                const schemaJson = await schemaResp.json();
+                const {valid, error} = await validateJsonSchema(schemaJson);
+                if (!valid) {
+                    throw new Error(`Schema file at ${fileUrl} is not a valid JSON Schema: ${error}`);
+                }
+                parsedSchemas.push(schemaJson);
+
+                incrementLoadingProgress();
+            } catch (err) {
+                setConfigErrorMessage(`Could not load/validate schemaFile at "${fileUrl}": ${err.message}`);
+                return;
             }
-        });
+        }
 
-        const configToSave = {
-            id: 'currentConfig',
-            systemPrompt: systemPromptText,
-            schemaFiles: parsedSchemas,
-            jsonldContextFiles: parsedJsonLds
-        };
+        // jsonldContextFiles
+        const parsedJsonLds = [];
+        for (const fileUrl of jsonldFileUrls) {
+            try {
+                const jsonldResp = await fetch(fileUrl);
+                if (!jsonldResp.ok) {
+                    throw new Error(`Failed to fetch JSON-LD file. HTTP ${jsonldResp.status}`);
+                }
+                const jsonldDoc = await jsonldResp.json();
+                const {valid, error} = await validateJsonLd(jsonldDoc);
+                if (!valid) {
+                    throw new Error(`JSON-LD file at ${fileUrl} is invalid: ${error}`);
+                }
+                parsedJsonLds.push(jsonldDoc);
 
-        await db.put('config', configToSave);
-    } catch (err) {
-        setConfigErrorMessage(`Failed to save config in IndexedDB: ${err.message}`);
-        return;
-    }
+                incrementLoadingProgress();
+            } catch (err) {
+                setConfigErrorMessage(`Could not load/validate JSON-LD file at "${fileUrl}": ${err.message}`);
+                return;
+            }
+        }
 
-    // Success!
-    setConfigErrorMessage('✓ Configuration files loaded successfully!');
-    const container = document.getElementById('config-error-message-container');
-    if (container) {
-        container.querySelector('.relative').classList.remove('bg-red-50', 'text-red-800', 'border-red-300');
-        container.querySelector('.relative').classList.add('bg-green-50', 'text-green-800', 'border-green-300');
+        // Save to IndexedDB
+        try {
+            const db = await openDB('medical-report-information-extractor-db', 1, {
+                upgrade(db) {
+                    if (!db.objectStoreNames.contains('config')) {
+                        db.createObjectStore('config', {keyPath: 'id'});
+                    }
+                }
+            });
+
+            const configToSave = {
+                id: 'currentConfig',
+                systemPrompt: systemPromptText,
+                schemaFiles: parsedSchemas,
+                jsonldContextFiles: parsedJsonLds
+            };
+
+            await db.put('config', configToSave);
+
+            incrementLoadingProgress();
+
+        } catch (err) {
+            setConfigErrorMessage(`Failed to save config in IndexedDB: ${err.message}`);
+            return;
+        }
+
+        // Success!
+        setConfigErrorMessage('✓ Configuration files loaded successfully!');
+        const container = document.getElementById('config-error-message-container');
+        if (container) {
+            container.querySelector('.relative').classList.remove('bg-red-50', 'text-red-800', 'border-red-300');
+            container.querySelector('.relative').classList.add('bg-green-50', 'text-green-800', 'border-green-300');
+        }
+
+    } finally {
+        hideConfigLoadingBar();
     }
 }
 
@@ -211,7 +264,7 @@ function setApiKeyMessage(message, isSuccess = false) {
     const container = document.getElementById('api-key-message-container');
     if (!container) return;
 
-    container.className = 'p-3 text-sm rounded-lg border my-2';
+    container.className = 'relative p-3 text-sm rounded-lg border my-2';
 
     if (isSuccess) {
         container.classList.add('bg-green-50', 'text-green-800', 'border-green-300');

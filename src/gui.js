@@ -61,6 +61,9 @@ function ui(divID) {
             <p class="mt-1 text-sm leading-6 text-gray-600">Please provide the application config.json URL. The file must specify the following properties: <span class="font-mono bg-gray-100 px-1 rounded">systemPrompt</span> URL pointing to the LLM task instruction file, <span class="font-mono bg-gray-100 px-1 rounded">schemaFiles</span> URLs to JSON Schema files describing the metadata of the information to extract, and optionally <span class="font-mono bg-gray-100 px-1 rounded">jsonldContextFiles</span> URLs to JSON-LD context files that map schema elements to standardized vocabularies.</p>
             <div class="mt-3 sm:mt-4 -space-y-px rounded-md flex flex-col items-center">
                 <div class="relative rounded-md px-3 pb-1.5 pt-2.5 w-full sm:w-3/4 md:w-2/3 lg:w-1/2 ring-1 ring-inset ring-gray-300 focus-within:z-10 focus-within:ring-2 focus-within:ring-green-600">
+                    <div id="config-loading-bar-wrapper" class="hidden w-full bg-gray-200 h-1 mb-2 overflow-hidden rounded">
+                        <div id="config-loading-bar" class="bg-green-500 h-full w-0 transition-all duration-200 ease-in"></div>
+                    </div>
                     <label for="config-url" class="block text-xs font-medium text-gray-900">Configuration file URL</label>
                     <input type="url" name="config-url" id="config-url" class="block w-full border-0 p-0 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-0 focus:border-0 text-sm sm:text-base sm:leading-6" placeholder="https://example.com/config.json" value=${configFileDefault} required>
                 </div>
