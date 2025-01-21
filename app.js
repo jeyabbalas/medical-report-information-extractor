@@ -14,10 +14,10 @@ function setConfigErrorMessage(errorText) {
         errorContainer.innerHTML = `
       <div class="relative bg-red-50 border border-red-300 text-red-800 rounded-lg p-3 text-sm max-h-96 overflow-y-auto">
         <button 
-          class="copy-error-button absolute top-2 right-2 bg-white text-gray-500 border border-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded px-2 py-1 text-xs"
+          class="copy-error-button absolute top-2 right-2 bg-white text-gray-500 border border-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded px-2 py-1 text-xs flex items-center gap-1"
           title="Copy entire error text"
         >
-          Copy
+          <span class="button-text">Copy</span>
         </button>
         <div class="error-text space-y-2"></div>
       </div>
@@ -48,13 +48,31 @@ async function copyConfigErrorMessage() {
     if (!errorContainer) return;
 
     const errorTextDiv = errorContainer.querySelector('.error-text');
-    if (!errorTextDiv) return;
+    const copyBtn = errorContainer.querySelector('.copy-error-button');
+    const buttonText = copyBtn.querySelector('.button-text');
+
+    if (!errorTextDiv || !copyBtn || !buttonText) return;
+
+    const originalClasses = copyBtn.className;
 
     try {
         await navigator.clipboard.writeText(errorTextDiv.textContent);
-        alert('Message copied to clipboard.');
+
+        copyBtn.className = 'copy-error-button absolute top-2 right-2 bg-white text-green-600 border border-green-400 rounded px-2 py-1 text-xs flex items-center gap-1';
+        buttonText.textContent = '✓';
+
+        setTimeout(() => {
+            copyBtn.className = originalClasses;
+            buttonText.textContent = 'Copy';
+        }, 2000);
     } catch (err) {
-        alert('Failed to copy message. Please copy manually.');
+        copyBtn.className = 'copy-error-button absolute top-2 right-2 bg-white text-red-600 border border-red-400 rounded px-2 py-1 text-xs flex items-center gap-1';
+        buttonText.textContent = '!';
+
+        setTimeout(() => {
+            copyBtn.className = originalClasses;
+            buttonText.textContent = 'Copy';
+        }, 2000);
     }
 }
 
@@ -227,3 +245,4 @@ function init() {
 
 
 document.addEventListener('DOMContentLoaded', init);
+//import {OpenAI} from 'https://cdn.skypack.dev/openai@4.78.1?min';
