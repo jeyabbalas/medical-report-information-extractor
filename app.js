@@ -233,7 +233,7 @@ async function loadConfig(configUrl) {
             });
 
             const configToSave = {
-                id: 'currentConfig',
+                id: 'appConfig',
                 systemPrompt: systemPromptText,
                 schemaFiles: parsedSchemas,
                 jsonldContextFiles: parsedJsonLds
@@ -350,7 +350,7 @@ async function populateModelsDropdown() {
             selectEl.appendChild(opt);
         }
 
-        let modelToSelect = '';
+        let modelToSelect;
 
         if (storedModel && storedModel.name && modelIds.includes(storedModel.name)) {
             modelToSelect = storedModel.name;
@@ -411,7 +411,7 @@ async function initOpenAiCredentials() {
             }
         });
 
-        const storedCreds = await db.get('config', 'openAiCreds');
+        const storedCreds = await db.get('config', 'llmApiCreds');
         if (!storedCreds) {
             return;
         }
@@ -478,7 +478,7 @@ async function submitOpenAiCredentials() {
             }
         });
         const credsToStore = {
-            id: 'openAiCreds',
+            id: 'llmApiCreds',
             baseUrl,
             apiKey
         };
@@ -517,7 +517,7 @@ async function forgetOpenAiCredentials() {
 
 async function clearOpenAiCredentialsFromIdb() {
     const db = await openDB('medical-report-information-extractor-db', 1);
-    await db.delete('config', 'openAiCreds');
+    await db.delete('config', 'llmApiCreds');
 }
 
 
