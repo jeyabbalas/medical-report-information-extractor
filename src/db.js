@@ -29,10 +29,12 @@ async function saveConfigRecord(record) {
     await db.put('config', record);
 }
 
+
 async function getConfigRecord(id) {
     const db = await getOrCreateDB();
     return db.get('config', id);
 }
+
 
 async function deleteConfigRecord(id) {
     const db = await getOrCreateDB();
@@ -49,10 +51,12 @@ async function putUploadedFile(fileRecord) {
     await db.put('reports', fileRecord);
 }
 
+
 async function getAllUploadedFiles() {
     const db = await getOrCreateDB();
     return db.getAll('reports');
 }
+
 
 async function clearUploadedFiles() {
     const db = await getOrCreateDB();
