@@ -142,7 +142,14 @@ function ui(divID) {
                             <span>Upload text reports</span>
                             <input id="file-upload" name="file-upload" class="sr-only" type="file" multiple accept=".txt">
                         </label>
-                        <p class="mt-1 sm:mt-0 sm:pl-1">or drag and drop files here</p>
+                        <p class="mt-1 sm:mt-0 sm:pl-1">-or- drag and drop files here</p>
+                        <p class="mt-2 sm:mt-0 sm:pl-1">
+                          -or-
+                          <a id="upload-example-reports-link" href="javascript:void(0);" 
+                             class="underline text-blue-600 hover:text-blue-800">
+                             Click here to upload example pathology reports
+                          </a>
+                        </p>
                     </div>
                     <p class="text-xs leading-5 text-gray-600 mt-2">TXT files only</p>
                 </div>
@@ -151,7 +158,7 @@ function ui(divID) {
         </div>
         <div id="file-upload-buttons" class="py-2 sm:py-4">
             <div class="flex flex-col sm:flex-row justify-center gap-2">
-                <button id="reset-btn" type="reset" class="w-full sm:w-auto rounded-md border border-gray-300 bg-white py-2 px-4 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">Reset</button>
+                <button id="clear-btn" type="reset" class="w-full sm:w-auto rounded-md border border-gray-300 bg-white py-2 px-4 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">Clear</button>
                 <button id="submit-btn" type="submit" class="w-full sm:w-auto inline-flex justify-center rounded-md border border-transparent bg-green-800 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">Submit</button>
             </div>
         </div>
