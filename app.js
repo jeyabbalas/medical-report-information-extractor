@@ -14,6 +14,13 @@ import {OpenAI} from 'https://cdn.skypack.dev/openai@4.78.1?min';
 
 
 let openaiClient = null;
+const exampleReportUrls = [
+    "https://raw.githubusercontent.com/jeyabbalas/medical-report-information-extractor/refs/heads/main/examples/bcn_generations_pathology_data/sample_reports/01.txt",
+    "https://raw.githubusercontent.com/jeyabbalas/medical-report-information-extractor/refs/heads/main/examples/bcn_generations_pathology_data/sample_reports/02.txt",
+    "https://raw.githubusercontent.com/jeyabbalas/medical-report-information-extractor/refs/heads/main/examples/bcn_generations_pathology_data/sample_reports/03.txt",
+    "https://raw.githubusercontent.com/jeyabbalas/medical-report-information-extractor/refs/heads/main/examples/bcn_generations_pathology_data/sample_reports/04.txt",
+    "https://raw.githubusercontent.com/jeyabbalas/medical-report-information-extractor/refs/heads/main/examples/bcn_generations_pathology_data/sample_reports/05.txt"
+]
 
 /*
  * -------------------------------------------------------------
@@ -479,6 +486,286 @@ function clearModelsDropdown() {
 
 /*
  * -------------------------------------------------------------
+ * FILE UPLOAD
+ * -------------------------------------------------------------
+ */
+
+async function fetchAndStoreExampleFiles(urls) {
+    for (const url of urls) {
+        try {
+            const resp = await fetch(url);
+            if (!resp.ok) {
+                console.error(`Failed to fetch example file: ${url}, status=${resp.status}`);
+                continue;
+            }
+            const text = await resp.text();
+            const parts = url.split('/');
+            const filename = parts[parts.length - 1] || 'untitled.txt';
+            await putUploadedFile({
+                id: `${Date.now()}-${Math.random()}`,
+                name: filename,
+                content: text
+            });
+        } catch (err) {
+            console.error('Error fetching example file:', err);
+        }
+    }
+    const allFiles = await getAllUploadedFiles();
+    displayFileList(allFiles);
+}
+
+
+function initFileUploadEventBindings(dropArea) {
+    // Re-bind drag-drop events
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropArea.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+    });
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropArea.addEventListener(eventName, () => {
+            dropArea.classList.add('bg-green-50');
+        });
+    });
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropArea.addEventListener(eventName, () => {
+            dropArea.classList.remove('bg-green-50');
+        });
+    });
+    dropArea.addEventListener('drop', async (e) => {
+        if (!e.dataTransfer?.files?.length) return;
+        await handleFiles(e.dataTransfer.files);
+    });
+
+    // Re-bind file input
+    const fileInput = dropArea.querySelector('#file-upload');
+    if (fileInput) {
+        fileInput.addEventListener('change', async () => {
+            if (!fileInput.files?.length) return;
+            await handleFiles(fileInput.files);
+            fileInput.value = '';
+        });
+    }
+
+    // Re-bind example link
+    const exampleLink = dropArea.querySelector('#upload-example-reports-link');
+    if (exampleLink) {
+        exampleLink.addEventListener('click', async () => {
+            await fetchAndStoreExampleFiles(exampleReportUrls);
+        });
+    }
+}
+
+
+function restoreDefaultDropAreaUI(dropArea) {
+    dropArea.innerHTML = `
+    <div class="text-center">
+      <div id="file-upload-icon">
+        <svg class="mx-auto h-10 w-10 sm:h-14 sm:w-14 text-gray-300" 
+             viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+          <path fill-rule="evenodd" clip-rule="evenodd"
+                d="M11.956 6h.05a2.99 2.99 0 0 1 2.117.879 
+                   3.003 3.003 0 0 1 0 4.242 
+                   2.99 2.99 0 0 1-2.117.879h-1.995v-1h1.995
+                   a2.002 2.002 0 0 0 0-4h-.914l-.123-.857
+                   a2.49 2.49 0 0 0-2.126-2.122
+                   A2.478 2.478 0 0 0 6.23 5.5l-.333.762
+                   -.809-.189A2.49 2.49 0 0 0 4.523 6
+                   c-.662 0-1.297.263-1.764.732
+                   A2.503 2.503 0 0 0 4.523 11h2.494v1H4.523
+                   a3.486 3.486 0 0 1-2.628-1.16
+                   3.502 3.502 0 0 1-.4-4.137
+                   A3.497 3.497 0 0 1 3.853 5.06
+                   c.486-.09.987-.077 1.468.041
+                   a3.486 3.486 0 0 1 3.657-2.06
+                   A3.479 3.479 0 0 1 11.956 6zm-1.663 3.853
+                   L8.979 8.54v5.436h-.994v-5.4
+                   L6.707 9.854 6 9.146 8.146 7h.708
+                   L11 9.146l-.707.707z"/>
+        </svg>
+      </div>
+      <div id="progress-ring" class="hidden">
+        <div class="relative inline-flex items-center justify-center">
+          <svg class="progress-ring" width="84" height="84">
+            <circle class="progress-ring__circle" stroke="green" stroke-width="6" 
+                    fill="transparent" r="36" cx="42" cy="42"/>
+          </svg>
+          <div class="progress-ring-text absolute text-sm sm:text-md text-green-600 font-semibold">
+            <span></span>
+          </div>
+        </div>
+      </div>
+      <div class="mt-3 sm:mt-4 flex flex-col sm:flex-row items-center justify-center text-sm leading-6 text-gray-600">
+        <label for="file-upload" class="relative cursor-pointer rounded-md bg-white font-semibold text-green-600
+               focus-within:outline-none focus-within:ring-2 focus-within:ring-green-600 
+               focus-within:ring-offset-2 hover:text-green-500">
+          <span>Upload text reports</span>
+          <input id="file-upload" name="file-upload" class="sr-only" type="file" multiple accept=".txt">
+        </label>
+        <p class="mt-1 sm:mt-0 sm:pl-1">-or- drag and drop files here</p>
+        <p class="mt-2 sm:mt-0 sm:pl-1">
+          -or-
+          <a id="upload-example-reports-link" href="javascript:void(0);" 
+             class="underline text-blue-600 hover:text-blue-800">
+             Click here to upload example pathology reports
+          </a>
+        </p>
+      </div>
+      <p class="text-xs leading-5 text-gray-600 mt-2">TXT files only</p>
+    </div>
+  `;
+
+    initFileUploadEventBindings(dropArea);
+}
+
+
+function displayFileContent(file) {
+    const dropArea = document.getElementById('file-drop-area');
+    if (!dropArea) return;
+
+    dropArea.innerHTML = '';
+    const contentWrapper = document.createElement('div');
+    contentWrapper.className = 'p-4 space-y-4';
+    contentWrapper.innerHTML = `
+    <button id="back-to-list" class="mb-2 inline-flex items-center px-3 py-1 
+        border border-gray-300 text-sm rounded hover:bg-gray-200 text-gray-600">
+      ← Back
+    </button>
+    <h3 class="text-lg font-semibold">${file.name}</h3>
+    <pre class="whitespace-pre-wrap bg-gray-100 rounded p-2 text-gray-800">
+${file.content}
+    </pre>
+  `;
+    dropArea.appendChild(contentWrapper);
+
+    const backBtn = document.getElementById('back-to-list');
+    if (backBtn) {
+        backBtn.addEventListener('click', async () => {
+            const allFiles = await getAllUploadedFiles();
+            displayFileList(allFiles);
+        });
+    }
+}
+
+
+function displayFileList(files) {
+    const dropArea = document.getElementById('file-drop-area');
+    if (!dropArea) return;
+
+    if (!files.length) {
+        restoreDefaultDropAreaUI(dropArea);
+        return;
+    }
+
+    dropArea.innerHTML = '';
+    const fileListWrapper = document.createElement('div');
+    fileListWrapper.className = 'flex flex-wrap gap-4 justify-center';
+
+    files.forEach(file => {
+        const fileCard = document.createElement('div');
+        fileCard.className = 'flex flex-col items-center justify-center w-36 h-36 border border-gray-300 rounded cursor-pointer hover:bg-gray-50';
+
+        fileCard.innerHTML = `
+      <svg width="48" height="48" fill="currentColor" class="text-gray-400 my-2" viewBox="0 0 24 24">
+        <path d="M14,2H6A2,2,0,0,0,4,4V20a2,2,0,0,0,2,2h12a2,
+          2,0,0,0,2-2V8ZM13,9V3.5L18.5,9Z" />
+      </svg>
+      <p class="text-sm text-gray-700 break-all px-2 text-center">${file.name}</p>
+    `;
+
+        fileCard.addEventListener('click', () => {
+            displayFileContent(file);
+        });
+
+        fileListWrapper.appendChild(fileCard);
+    });
+
+    dropArea.appendChild(fileListWrapper);
+}
+
+
+async function handleFiles(fileList) {
+    const filesArray = Array.from(fileList);
+    const textFiles = filesArray.filter(f => f.type === 'text/plain');
+    if (!textFiles.length) return;
+
+    for (const file of textFiles) {
+        const text = await file.text();
+        await putUploadedFile({
+            id: `${Date.now()}-${Math.random()}`,
+            name: file.name,
+            content: text
+        });
+    }
+
+    const allFiles = await getAllUploadedFiles();
+    displayFileList(allFiles);
+}
+
+
+async function initFileUpload() {
+    // Drag-and-drop file upload
+    const dropArea = document.getElementById('file-drop-area');
+    if (dropArea) {
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            });
+        });
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropArea.addEventListener(eventName, () => {
+                dropArea.classList.add('bg-green-50');
+            });
+        });
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, () => {
+                dropArea.classList.remove('bg-green-50');
+            });
+        });
+
+        dropArea.addEventListener('drop', async (e) => {
+            if (!e.dataTransfer?.files?.length) return;
+            await handleFiles(e.dataTransfer.files);
+        });
+    }
+
+    // Manual file upload
+    const fileInput = document.getElementById('file-upload');
+    if (fileInput) {
+        fileInput.addEventListener('change', async () => {
+            if (!fileInput.files?.length) return;
+            await handleFiles(fileInput.files);
+            fileInput.value = '';
+        });
+    }
+
+    // Example files upload
+    const exampleLink = document.getElementById('upload-example-reports-link');
+    if (exampleLink) {
+        exampleLink.addEventListener('click', async () => {
+            await fetchAndStoreExampleFiles(exampleReportUrls);
+        });
+    }
+
+    // Clear uploaded files
+    const clearBtn = document.getElementById('clear-btn');
+    if (clearBtn) {
+        clearBtn.addEventListener('click', async () => {
+            await clearUploadedFiles();
+            displayFileList([]);
+        });
+    }
+
+    // Load existing files from IDB
+    const filesInDb = await getAllUploadedFiles();
+    displayFileList(filesInDb);
+}
+
+
+/*
+ * -------------------------------------------------------------
  * MAIN APPLICATION LOGIC
  * -------------------------------------------------------------
  */
@@ -529,6 +816,9 @@ async function init() {
     if (forgetApiKeyBtn) {
         forgetApiKeyBtn.addEventListener('click', forgetOpenAiCredentials);
     }
+
+    // Handle file upload
+    await initFileUpload();
 }
 
 
