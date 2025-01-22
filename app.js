@@ -20,10 +20,9 @@ const exampleReportUrls = [
     "https://raw.githubusercontent.com/jeyabbalas/medical-report-information-extractor/refs/heads/main/examples/bcn_generations_pathology_data/sample_reports/03.txt",
     "https://raw.githubusercontent.com/jeyabbalas/medical-report-information-extractor/refs/heads/main/examples/bcn_generations_pathology_data/sample_reports/04.txt",
     "https://raw.githubusercontent.com/jeyabbalas/medical-report-information-extractor/refs/heads/main/examples/bcn_generations_pathology_data/sample_reports/05.txt"
-]
+];
 
-/*
- * -------------------------------------------------------------
+/* -------------------------------------------------------------
  * CONFIGURATION FILE LOADING
  * -------------------------------------------------------------
  */
@@ -259,8 +258,7 @@ async function loadConfig(configUrl) {
     }
 }
 
-/*
- * -------------------------------------------------------------
+/* -------------------------------------------------------------
  * OPENAI API CREDENTIAL VALIDATION & MODEL SELECTION
  * -------------------------------------------------------------
  */
@@ -457,6 +455,7 @@ async function submitOpenAiCredentials() {
     }
 }
 
+
 async function forgetOpenAiCredentials() {
     clearApiKeyMessage();
     try {
@@ -484,18 +483,49 @@ function clearModelsDropdown() {
     selectEl.innerHTML = `<option value="" disabled selected>Set URL/API key above to see models list</option>`;
 }
 
-/*
- * -------------------------------------------------------------
+/* -------------------------------------------------------------
  * FILE UPLOAD
  * -------------------------------------------------------------
  */
 
+let fileUploadBarWrapper = null;
+let fileUploadBar = null;
+
+function showFileUploadBar() {
+    if (!fileUploadBarWrapper) return;
+    fileUploadBarWrapper.classList.remove('hidden');
+}
+
+
+function hideFileUploadBar() {
+    if (!fileUploadBarWrapper) return;
+    fileUploadBarWrapper.classList.add('hidden');
+    if (fileUploadBar) {
+        fileUploadBar.style.width = '0%';
+    }
+}
+
+
+function updateFileUploadBar(percent) {
+    if (!fileUploadBar) return;
+    fileUploadBar.style.width = `${percent}%`;
+}
+
+
 async function fetchAndStoreExampleFiles(urls) {
+    await clearUploadedFiles();
+
+    showFileUploadBar();
+    let completed = 0;
+    const total = urls.length;
+
     for (const url of urls) {
         try {
             const resp = await fetch(url);
             if (!resp.ok) {
                 console.error(`Failed to fetch example file: ${url}, status=${resp.status}`);
+                completed++;
+                updateFileUploadBar((completed / total) * 100);
                 continue;
             }
             const text = await resp.text();
@@ -506,17 +536,23 @@ async function fetchAndStoreExampleFiles(urls) {
                 name: filename,
                 content: text
             });
+            completed++;
+            updateFileUploadBar((completed / total) * 100);
         } catch (err) {
             console.error('Error fetching example file:', err);
+            completed++;
+            updateFileUploadBar((completed / total) * 100);
         }
     }
+
+    hideFileUploadBar();
     const allFiles = await getAllUploadedFiles();
     displayFileList(allFiles);
 }
 
 
 function initFileUploadEventBindings(dropArea) {
-    // Re-bind drag-drop events
+    // Drag-and-drop
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
         dropArea.addEventListener(eventName, (e) => {
             e.preventDefault();
@@ -538,7 +574,7 @@ function initFileUploadEventBindings(dropArea) {
         await handleFiles(e.dataTransfer.files);
     });
 
-    // Re-bind file input
+    // Manual file input
     const fileInput = dropArea.querySelector('#file-upload');
     if (fileInput) {
         fileInput.addEventListener('change', async () => {
@@ -548,7 +584,7 @@ function initFileUploadEventBindings(dropArea) {
         });
     }
 
-    // Re-bind example link
+    // Example file upload
     const exampleLink = dropArea.querySelector('#upload-example-reports-link');
     if (exampleLink) {
         exampleLink.addEventListener('click', async () => {
@@ -559,64 +595,72 @@ function initFileUploadEventBindings(dropArea) {
 
 
 function restoreDefaultDropAreaUI(dropArea) {
-    dropArea.innerHTML = `
-    <div class="text-center">
-      <div id="file-upload-icon">
-        <svg class="mx-auto h-10 w-10 sm:h-14 sm:w-14 text-gray-300" 
-             viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-          <path fill-rule="evenodd" clip-rule="evenodd"
-                d="M11.956 6h.05a2.99 2.99 0 0 1 2.117.879 
-                   3.003 3.003 0 0 1 0 4.242 
-                   2.99 2.99 0 0 1-2.117.879h-1.995v-1h1.995
-                   a2.002 2.002 0 0 0 0-4h-.914l-.123-.857
-                   a2.49 2.49 0 0 0-2.126-2.122
-                   A2.478 2.478 0 0 0 6.23 5.5l-.333.762
-                   -.809-.189A2.49 2.49 0 0 0 4.523 6
-                   c-.662 0-1.297.263-1.764.732
-                   A2.503 2.503 0 0 0 4.523 11h2.494v1H4.523
-                   a3.486 3.486 0 0 1-2.628-1.16
-                   3.502 3.502 0 0 1-.4-4.137
-                   A3.497 3.497 0 0 1 3.853 5.06
-                   c.486-.09.987-.077 1.468.041
-                   a3.486 3.486 0 0 1 3.657-2.06
-                   A3.479 3.479 0 0 1 11.956 6zm-1.663 3.853
-                   L8.979 8.54v5.436h-.994v-5.4
-                   L6.707 9.854 6 9.146 8.146 7h.708
-                   L11 9.146l-.707.707z"/>
-        </svg>
-      </div>
-      <div id="progress-ring" class="hidden">
-        <div class="relative inline-flex items-center justify-center">
-          <svg class="progress-ring" width="84" height="84">
-            <circle class="progress-ring__circle" stroke="green" stroke-width="6" 
-                    fill="transparent" r="36" cx="42" cy="42"/>
+    const parent = dropArea.parentNode;
+
+    const newDropArea = document.createElement('div');
+    newDropArea.id = dropArea.id;
+    newDropArea.className = dropArea.className;
+
+    parent.replaceChild(newDropArea, dropArea);
+
+    newDropArea.innerHTML = `
+      <div class="text-center">
+        <div id="file-upload-icon">
+          <svg class="mx-auto h-10 w-10 sm:h-14 sm:w-14 text-gray-300" 
+               viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd" clip-rule="evenodd"
+                  d="M11.956 6h.05a2.99 2.99 0 0 1 2.117.879 
+                     3.003 3.003 0 0 1 0 4.242 
+                     2.99 2.99 0 0 1-2.117.879h-1.995v-1h1.995
+                     a2.002 2.002 0 0 0 0-4h-.914l-.123-.857
+                     a2.49 2.49 0 0 0-2.126-2.122
+                     A2.478 2.478 0 0 0 6.23 5.5l-.333.762
+                     -.809-.189A2.49 2.49 0 0 0 4.523 6
+                     c-.662 0-1.297.263-1.764.732
+                     A2.503 2.503 0 0 0 4.523 11h2.494v1H4.523
+                     a3.486 3.486 0 0 1-2.628-1.16
+                     3.502 3.502 0 0 1-.4-4.137
+                     A3.497 3.497 0 0 1 3.853 5.06
+                     c.486-.09.987-.077 1.468.041
+                     a3.486 3.486 0 0 1 3.657-2.06
+                     A3.479 3.479 0 0 1 11.956 6zm-1.663 3.853
+                     L8.979 8.54v5.436h-.994v-5.4
+                     L6.707 9.854 6 9.146 8.146 7h.708
+                     L11 9.146l-.707.707z"/>
           </svg>
-          <div class="progress-ring-text absolute text-sm sm:text-md text-green-600 font-semibold">
-            <span></span>
+        </div>
+        <div id="progress-ring" class="hidden">
+          <div class="relative inline-flex items-center justify-center">
+            <svg class="progress-ring" width="84" height="84">
+              <circle class="progress-ring__circle" stroke="green" stroke-width="6" 
+                      fill="transparent" r="36" cx="42" cy="42"/>
+            </svg>
+            <div class="progress-ring-text absolute text-sm sm:text-md text-green-600 font-semibold">
+              <span></span>
+            </div>
           </div>
         </div>
+        <div class="mt-3 sm:mt-4 flex flex-col sm:flex-row items-center justify-center text-sm leading-6 text-gray-600">
+          <label for="file-upload" class="relative cursor-pointer rounded-md bg-white font-semibold text-green-600
+                 focus-within:outline-none focus-within:ring-2 focus-within:ring-green-600 
+                 focus-within:ring-offset-2 hover:text-green-500">
+            <span>Upload text reports</span>
+            <input id="file-upload" name="file-upload" class="sr-only" type="file" multiple accept=".txt">
+          </label>
+          <p class="mt-1 sm:mt-0 sm:pl-1">-or- drag and drop files here</p>
+          <p class="mt-2 sm:mt-0 sm:pl-1">
+            -or-
+            <a id="upload-example-reports-link" href="javascript:void(0);" 
+               class="underline text-blue-600 hover:text-blue-800">
+               Click here to upload example pathology reports
+            </a>
+          </p>
+        </div>
+        <p class="text-xs leading-5 text-gray-600 mt-2">TXT files only</p>
       </div>
-      <div class="mt-3 sm:mt-4 flex flex-col sm:flex-row items-center justify-center text-sm leading-6 text-gray-600">
-        <label for="file-upload" class="relative cursor-pointer rounded-md bg-white font-semibold text-green-600
-               focus-within:outline-none focus-within:ring-2 focus-within:ring-green-600 
-               focus-within:ring-offset-2 hover:text-green-500">
-          <span>Upload text reports</span>
-          <input id="file-upload" name="file-upload" class="sr-only" type="file" multiple accept=".txt">
-        </label>
-        <p class="mt-1 sm:mt-0 sm:pl-1">-or- drag and drop files here</p>
-        <p class="mt-2 sm:mt-0 sm:pl-1">
-          -or-
-          <a id="upload-example-reports-link" href="javascript:void(0);" 
-             class="underline text-blue-600 hover:text-blue-800">
-             Click here to upload example pathology reports
-          </a>
-        </p>
-      </div>
-      <p class="text-xs leading-5 text-gray-600 mt-2">TXT files only</p>
-    </div>
-  `;
+    `;
 
-    initFileUploadEventBindings(dropArea);
+    initFileUploadEventBindings(newDropArea);
 }
 
 
@@ -627,13 +671,17 @@ function displayFileContent(file) {
     dropArea.innerHTML = '';
     const contentWrapper = document.createElement('div');
     contentWrapper.className = 'p-4 space-y-4';
+
+    const dropAreaHeight = dropArea.offsetHeight || 200;
+
     contentWrapper.innerHTML = `
     <button id="back-to-list" class="mb-2 inline-flex items-center px-3 py-1 
         border border-gray-300 text-sm rounded hover:bg-gray-200 text-gray-600">
       ← Back
     </button>
     <h3 class="text-lg font-semibold">${file.name}</h3>
-    <pre class="whitespace-pre-wrap bg-gray-100 rounded p-2 text-gray-800">
+    <pre class="whitespace-pre-wrap bg-gray-100 rounded p-2 text-gray-800"
+         style="max-height:${dropAreaHeight * 2}px; overflow-y:auto;">
 ${file.content}
     </pre>
   `;
@@ -662,6 +710,10 @@ function displayFileList(files) {
     const fileListWrapper = document.createElement('div');
     fileListWrapper.className = 'flex flex-wrap gap-4 justify-center';
 
+    const dropAreaHeight = dropArea.offsetHeight || 200;
+    fileListWrapper.style.maxHeight = (dropAreaHeight * 2) + 'px';
+    fileListWrapper.style.overflowY = 'auto';
+
     files.forEach(file => {
         const fileCard = document.createElement('div');
         fileCard.className = 'flex flex-col items-center justify-center w-36 h-36 border border-gray-300 rounded cursor-pointer hover:bg-gray-50';
@@ -686,9 +738,15 @@ function displayFileList(files) {
 
 
 async function handleFiles(fileList) {
+    await clearUploadedFiles();
+
     const filesArray = Array.from(fileList);
     const textFiles = filesArray.filter(f => f.type === 'text/plain');
     if (!textFiles.length) return;
+
+    showFileUploadBar();
+    let completed = 0;
+    const total = textFiles.length;
 
     for (const file of textFiles) {
         const text = await file.text();
@@ -697,59 +755,29 @@ async function handleFiles(fileList) {
             name: file.name,
             content: text
         });
+        completed++;
+        updateFileUploadBar((completed / total) * 100);
     }
+
+    hideFileUploadBar();
 
     const allFiles = await getAllUploadedFiles();
     displayFileList(allFiles);
 }
 
-
 async function initFileUpload() {
-    // Drag-and-drop file upload
-    const dropArea = document.getElementById('file-drop-area');
-    if (dropArea) {
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            dropArea.addEventListener(eventName, (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-            });
-        });
-        ['dragenter', 'dragover'].forEach(eventName => {
-            dropArea.addEventListener(eventName, () => {
-                dropArea.classList.add('bg-green-50');
-            });
-        });
-        ['dragleave', 'drop'].forEach(eventName => {
-            dropArea.addEventListener(eventName, () => {
-                dropArea.classList.remove('bg-green-50');
-            });
-        });
+    const fileUploadContainer = document.getElementById('file-upload-container');
+    if (fileUploadContainer) {
+        fileUploadContainer.insertAdjacentHTML('afterbegin', `
+          <div id="file-upload-loading-bar-wrapper" class="hidden w-full bg-gray-200 h-1 mb-1 overflow-hidden rounded">
+            <div id="file-upload-loading-bar" class="bg-green-500 h-full w-0 transition-all duration-200 ease-in"></div>
+          </div>
+        `);
 
-        dropArea.addEventListener('drop', async (e) => {
-            if (!e.dataTransfer?.files?.length) return;
-            await handleFiles(e.dataTransfer.files);
-        });
+        fileUploadBarWrapper = document.getElementById('file-upload-loading-bar-wrapper');
+        fileUploadBar = document.getElementById('file-upload-loading-bar');
     }
 
-    // Manual file upload
-    const fileInput = document.getElementById('file-upload');
-    if (fileInput) {
-        fileInput.addEventListener('change', async () => {
-            if (!fileInput.files?.length) return;
-            await handleFiles(fileInput.files);
-            fileInput.value = '';
-        });
-    }
-
-    // Example files upload
-    const exampleLink = document.getElementById('upload-example-reports-link');
-    if (exampleLink) {
-        exampleLink.addEventListener('click', async () => {
-            await fetchAndStoreExampleFiles(exampleReportUrls);
-        });
-    }
-
-    // Clear uploaded files
     const clearBtn = document.getElementById('clear-btn');
     if (clearBtn) {
         clearBtn.addEventListener('click', async () => {
@@ -758,17 +786,16 @@ async function initFileUpload() {
         });
     }
 
-    // Load existing files from IDB
     const filesInDb = await getAllUploadedFiles();
     displayFileList(filesInDb);
 }
-
 
 /*
  * -------------------------------------------------------------
  * MAIN APPLICATION LOGIC
  * -------------------------------------------------------------
  */
+
 async function init() {
     ui('app');
 
@@ -823,5 +850,5 @@ async function init() {
 
 
 document.addEventListener('DOMContentLoaded', async () => {
-  await init();
+    await init();
 });
