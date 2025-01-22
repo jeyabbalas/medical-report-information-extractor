@@ -647,7 +647,7 @@ function restoreDefaultDropAreaUI(dropArea) {
             <span>Upload text reports</span>
             <input id="file-upload" name="file-upload" class="sr-only" type="file" multiple accept=".txt">
           </label>
-          <p class="mt-1 sm:mt-0 sm:pl-1">-or- drag and drop files here</p>
+          <p class="mt-1 sm:mt-0 sm:pl-1">-or- Drag and drop files here</p>
           <p class="mt-2 sm:mt-0 sm:pl-1">
             -or-
             <a id="upload-example-reports-link" href="javascript:void(0);" 
@@ -681,7 +681,7 @@ function displayFileContent(file) {
     </button>
     <h3 class="text-lg font-semibold">${file.name}</h3>
     <pre class="whitespace-pre-wrap bg-gray-100 rounded p-2 text-gray-800"
-         style="max-height:${dropAreaHeight * 2}px; overflow-y:auto;">
+         style="max-height:${dropAreaHeight * 4}px; overflow-y:auto;">
 ${file.content}
     </pre>
   `;
