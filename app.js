@@ -1,12 +1,25 @@
 import {ui} from './src/gui.js';
 import {validateJsonSchema} from './src/jsonSchemaUtils.js';
-import {validateJsonLd, buildPlainTable, buildLinkedTable} from "./src/jsonLdUtils.js";
+import {validateJsonLd, buildPlainTable, buildLinkedTable} from './src/jsonLdUtils.js';
+import {
+    saveConfigRecord,
+    getConfigRecord,
+    deleteConfigRecord,
+    putUploadedFile,
+    getAllUploadedFiles,
+    clearUploadedFiles
+} from './src/db.js';
 
-import {openDB} from 'https://cdn.jsdelivr.net/npm/idb@8/+esm'
 import {OpenAI} from 'https://cdn.skypack.dev/openai@4.78.1?min';
 
 
 let openaiClient = null;
+
+/*
+ * -------------------------------------------------------------
+ * CONFIGURATION FILE LOADING
+ * -------------------------------------------------------------
+ */
 
 function setConfigErrorMessage(errorText) {
     const errorContainer = document.getElementById('config-error-message-container');
@@ -15,10 +28,7 @@ function setConfigErrorMessage(errorText) {
     if (!errorContainer.querySelector('.copy-error-button')) {
         errorContainer.innerHTML = `
       <div class="relative bg-red-50 border border-red-300 text-red-800 rounded-lg p-3 text-sm max-h-96 overflow-y-auto">
-        <button 
-          class="copy-error-button absolute top-2 right-2 bg-white text-gray-500 border border-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded px-2 py-1 text-xs flex items-center gap-1"
-          title="Copy entire error text"
-        >
+        <button class="copy-error-button absolute top-2 right-2 bg-white text-gray-500 border border-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded px-2 py-1 text-xs flex items-center gap-1" title="Copy entire error text">
           <span class="button-text">Copy</span>
         </button>
         <div class="error-text space-y-2"></div>
@@ -129,16 +139,13 @@ async function loadConfig(configUrl) {
                 throw new Error(`Failed to fetch config.json. HTTP ${resp.status}`);
             }
             configJson = await resp.json();
-
-            // We fetched the config, so increment progress:
             incrementLoadingProgress();
-
         } catch (err) {
             setConfigErrorMessage(`Could not parse the config file as JSON: ${err.message}`);
             return;
         }
 
-        // Check config JSON format
+        // Validate config JSON structure
         const {systemPrompt, schemaFiles, jsonldContextFiles} = configJson;
         if (!systemPrompt) {
             setConfigErrorMessage(`config.json is missing "systemPrompt" property.`);
@@ -158,9 +165,7 @@ async function loadConfig(configUrl) {
         }
 
         const schemaFileUrls = Array.isArray(schemaFiles) ? schemaFiles : [schemaFiles];
-        const jsonldFileUrls = Array.isArray(jsonldContextFiles)
-            ? jsonldContextFiles
-            : [jsonldContextFiles];
+        const jsonldFileUrls = Array.isArray(jsonldContextFiles) ? jsonldContextFiles : [jsonldContextFiles];
         totalFetches = 1 + schemaFileUrls.length + jsonldFileUrls.length + 1;
 
         // systemPrompt file
@@ -171,7 +176,6 @@ async function loadConfig(configUrl) {
                 throw new Error(`Failed to fetch systemPrompt file. HTTP ${promptResp.status}`);
             }
             systemPromptText = await promptResp.text();
-
             incrementLoadingProgress();
         } catch (err) {
             setConfigErrorMessage(`Could not fetch systemPrompt text: ${err.message}`);
@@ -192,7 +196,6 @@ async function loadConfig(configUrl) {
                     throw new Error(`Schema file at ${fileUrl} is not a valid JSON Schema: ${error}`);
                 }
                 parsedSchemas.push(schemaJson);
-
                 incrementLoadingProgress();
             } catch (err) {
                 setConfigErrorMessage(`Could not load/validate schemaFile at "${fileUrl}": ${err.message}`);
@@ -214,7 +217,6 @@ async function loadConfig(configUrl) {
                     throw new Error(`JSON-LD file at ${fileUrl} is invalid: ${error}`);
                 }
                 parsedJsonLds.push(jsonldDoc);
-
                 incrementLoadingProgress();
             } catch (err) {
                 setConfigErrorMessage(`Could not load/validate JSON-LD file at "${fileUrl}": ${err.message}`);
@@ -223,26 +225,16 @@ async function loadConfig(configUrl) {
         }
 
         // Save to IndexedDB
+        const configToSave = {
+            id: 'appConfig',
+            systemPrompt: systemPromptText,
+            schemaFiles: parsedSchemas,
+            jsonldContextFiles: parsedJsonLds
+        };
+
         try {
-            const db = await openDB('medical-report-information-extractor-db', 1, {
-                upgrade(db) {
-                    if (!db.objectStoreNames.contains('config')) {
-                        db.createObjectStore('config', {keyPath: 'id'});
-                    }
-                }
-            });
-
-            const configToSave = {
-                id: 'appConfig',
-                systemPrompt: systemPromptText,
-                schemaFiles: parsedSchemas,
-                jsonldContextFiles: parsedJsonLds
-            };
-
-            await db.put('config', configToSave);
-
+            await saveConfigRecord(configToSave);
             incrementLoadingProgress();
-
         } catch (err) {
             setConfigErrorMessage(`Failed to save config in IndexedDB: ${err.message}`);
             return;
@@ -255,12 +247,16 @@ async function loadConfig(configUrl) {
             container.querySelector('.relative').classList.remove('bg-red-50', 'text-red-800', 'border-red-300');
             container.querySelector('.relative').classList.add('bg-green-50', 'text-green-800', 'border-green-300');
         }
-
     } finally {
         hideConfigLoadingBar();
     }
 }
 
+/*
+ * -------------------------------------------------------------
+ * OPENAI API CREDENTIAL VALIDATION & MODEL SELECTION
+ * -------------------------------------------------------------
+ */
 
 function setApiKeyMessage(message, isSuccess = false) {
     const container = document.getElementById('api-key-message-container');
@@ -312,7 +308,6 @@ async function createGlobalOpenAiClient(baseUrl, apiKey) {
         apiKey: apiKey,
         dangerouslyAllowBrowser: true
     });
-
     await populateModelsDropdown();
 }
 
@@ -322,27 +317,18 @@ async function populateModelsDropdown() {
     const selectEl = document.getElementById('llm-model');
     if (!selectEl) return;
 
-    // Clear existing dropdown
     selectEl.innerHTML = '';
 
     try {
         const resp = await openaiClient.models.list();
-        const modelIds = resp.data.map((m) => m.id).sort();
+        const modelIds = resp.data.map(m => m.id).sort();
 
         if (!modelIds.length) {
             selectEl.innerHTML = `<option disabled selected>No models found</option>`;
             return;
         }
 
-        const db = await openDB('medical-report-information-extractor-db', 1, {
-            upgrade(db) {
-                if (!db.objectStoreNames.contains('config')) {
-                    db.createObjectStore('config', {keyPath: 'id'});
-                }
-            }
-        });
-        const storedModel = await db.get('config', 'model');
-
+        const storedModel = await getConfigRecord('model');
         for (const modelId of modelIds) {
             const opt = document.createElement('option');
             opt.value = modelId;
@@ -351,7 +337,6 @@ async function populateModelsDropdown() {
         }
 
         let modelToSelect;
-
         if (storedModel && storedModel.name && modelIds.includes(storedModel.name)) {
             modelToSelect = storedModel.name;
         } else if (modelIds.includes('gpt-4o')) {
@@ -359,7 +344,6 @@ async function populateModelsDropdown() {
         } else {
             modelToSelect = modelIds[0];
         }
-
         selectEl.value = modelToSelect;
 
         if (!storedModel || storedModel.name !== modelToSelect) {
@@ -373,18 +357,11 @@ async function populateModelsDropdown() {
 
 
 async function storeSelectedModelInIdb(modelName) {
-    const db = await openDB('medical-report-information-extractor-db', 1, {
-        upgrade(db) {
-            if (!db.objectStoreNames.contains('config')) {
-                db.createObjectStore('config', {keyPath: 'id'});
-            }
-        }
-    });
     const record = {
         id: 'model',
         name: modelName
     };
-    await db.put('config', record);
+    await saveConfigRecord(record);
 }
 
 
@@ -403,18 +380,8 @@ async function handleModelSelectionChange() {
 
 async function initOpenAiCredentials() {
     try {
-        const db = await openDB('medical-report-information-extractor-db', 1, {
-            upgrade(db) {
-                if (!db.objectStoreNames.contains('config')) {
-                    db.createObjectStore('config', {keyPath: 'id'});
-                }
-            }
-        });
-
-        const storedCreds = await db.get('config', 'llmApiCreds');
-        if (!storedCreds) {
-            return;
-        }
+        const storedCreds = await getConfigRecord('llmApiCreds');
+        if (!storedCreds) return;
 
         // Populate fields
         const baseUrlField = document.getElementById('llm-base-url');
@@ -424,15 +391,14 @@ async function initOpenAiCredentials() {
             baseUrlField.value = storedCreds.baseUrl ?? '';
             apiKeyField.value = storedCreds.apiKey ?? '';
 
-            // Attempt validation
             const isValid = await validateOpenAiApiKey(storedCreds.baseUrl, storedCreds.apiKey);
             if (isValid) {
                 await createGlobalOpenAiClient(storedCreds.baseUrl, storedCreds.apiKey);
                 setApiKeyMessage('✓ OpenAI API key is valid.', true);
             } else {
                 setApiKeyMessage('OpenAI API key appears to be invalid.', false);
-                await clearOpenAiCredentialsFromIdb();
-                await clearModelSelectionFromIdb();
+                await deleteConfigRecord('llmApiCreds');
+                await deleteConfigRecord('model');
                 clearModelsDropdown();
             }
         }
@@ -454,7 +420,6 @@ async function submitOpenAiCredentials() {
 
     const baseUrl = baseUrlField.value.trim();
     const apiKey = apiKeyField.value.trim();
-
     if (!baseUrl || !apiKey) {
         setApiKeyMessage('Please provide both Base URL and API key.', false);
         return;
@@ -464,25 +429,18 @@ async function submitOpenAiCredentials() {
     if (!isValid) {
         setApiKeyMessage('Invalid API credentials. Please check your base URL and key.', false);
         clearModelsDropdown();
-        await clearOpenAiCredentialsFromIdb();
-        await clearModelSelectionFromIdb();
+        await deleteConfigRecord('llmApiCreds');
+        await deleteConfigRecord('model');
         return;
     }
 
     try {
-        const db = await openDB('medical-report-information-extractor-db', 1, {
-            upgrade(db) {
-                if (!db.objectStoreNames.contains('config')) {
-                    db.createObjectStore('config', {keyPath: 'id'});
-                }
-            }
-        });
         const credsToStore = {
             id: 'llmApiCreds',
             baseUrl,
             apiKey
         };
-        await db.put('config', credsToStore);
+        await saveConfigRecord(credsToStore);
 
         await createGlobalOpenAiClient(baseUrl, apiKey);
 
@@ -492,12 +450,11 @@ async function submitOpenAiCredentials() {
     }
 }
 
-
 async function forgetOpenAiCredentials() {
     clearApiKeyMessage();
     try {
-        await clearOpenAiCredentialsFromIdb();
-        await clearModelSelectionFromIdb();
+        await deleteConfigRecord('llmApiCreds');
+        await deleteConfigRecord('model');
 
         const baseUrlField = document.getElementById('llm-base-url');
         const apiKeyField = document.getElementById('llm-api-key');
@@ -505,7 +462,6 @@ async function forgetOpenAiCredentials() {
         if (apiKeyField) apiKeyField.value = '';
 
         clearModelsDropdown();
-
         openaiClient = null;
 
         setApiKeyMessage('OpenAI credentials have been removed.', true);
@@ -515,25 +471,17 @@ async function forgetOpenAiCredentials() {
 }
 
 
-async function clearOpenAiCredentialsFromIdb() {
-    const db = await openDB('medical-report-information-extractor-db', 1);
-    await db.delete('config', 'llmApiCreds');
-}
-
-
-async function clearModelSelectionFromIdb() {
-    const db = await openDB('medical-report-information-extractor-db', 1);
-    await db.delete('config', 'model');
-}
-
-
 function clearModelsDropdown() {
     const selectEl = document.getElementById('llm-model');
     if (!selectEl) return;
     selectEl.innerHTML = `<option value="" disabled selected>Set URL/API key above to see models list</option>`;
 }
 
-
+/*
+ * -------------------------------------------------------------
+ * MAIN APPLICATION LOGIC
+ * -------------------------------------------------------------
+ */
 async function init() {
     ui('app');
 
