@@ -895,6 +895,53 @@ function scrollToFirstMissingField(missingItem) {
 }
 
 
+function disableSubmitButton(disable) {
+    const submitBtn = document.getElementById('submit-btn');
+    if (submitBtn) {
+        submitBtn.disabled = disable;
+        submitBtn.classList.toggle('opacity-50', disable);
+        submitBtn.classList.toggle('cursor-not-allowed', disable);
+    }
+}
+
+
+function updateEraseDataButtonText(text, disabled = false) {
+    const eraseBtn = document.getElementById('erase-data-btn');
+    if (!eraseBtn) return;
+    eraseBtn.textContent = text;
+    eraseBtn.disabled = disabled;
+    eraseBtn.classList.toggle('opacity-50', disabled);
+    eraseBtn.classList.toggle('cursor-not-allowed', disabled);
+}
+
+
+function updateExtractionProgress(current, total) {
+    const bar = document.getElementById('extraction-progress-bar');
+    const label = document.getElementById('extraction-progress-label');
+    let pct = 0;
+    if (total > 0) {
+        pct = Math.round((current / total) * 100);
+    }
+    if (bar) bar.style.width = pct + '%';
+    if (label) label.textContent = total > 0 ? `Extracting ${current} of ${total}...` : '';
+}
+
+
+function showExtractionProgressContainer(show) {
+    const container = document.getElementById('extraction-progress-container');
+    if (!container) return;
+    if (show) {
+        container.classList.remove('hidden');
+    } else {
+        container.classList.add('hidden');
+        // Reset bar
+        updateExtractionProgress(0, 1); // set bar to 0
+        const ring = document.getElementById('extraction-progress-ring');
+        if (ring) ring.classList.add('hidden');
+    }
+}
+
+
 /**
  * The main extraction function:
  *  1. Check for missing info. If any, show modal & scroll.
@@ -908,6 +955,34 @@ async function handleSubmitExtraction() {
         await showMissingInfoModal(missing);
         scrollToFirstMissingField(missing[0]);
         return;
+    }
+
+    disableSubmitButton(true);
+    updateEraseDataButtonText('Terminate');
+    extractionTerminated = false;
+    showExtractionProgressContainer(true);
+
+    try {
+        const appConfig = await getConfigRecord('appConfig');
+        const creds = await getConfigRecord('llmApiCreds');
+        const modelSelect = await getConfigRecord('model');
+
+        if (!appConfig || !creds || !modelSelect) {
+            // This should never happen
+            console.error('Required information for data extraction is missing. Re-fill the application form. Aborting.');
+            return;
+        }
+
+        const systemPrompt = appConfig.systemPrompt;
+        const schemaFiles = appConfig.schemaFiles;
+        const model = modelSelect.name;
+
+        const reports = await getAllUploadedFiles();
+    } finally {
+        disableSubmitButton(false);
+        updateEraseDataButtonText('Erase extracted data');
+        extractionTerminated = false;
+        showExtractionProgressContainer(false);
     }
 }
 

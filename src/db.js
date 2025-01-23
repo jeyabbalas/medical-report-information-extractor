@@ -18,7 +18,7 @@ async function getOrCreateDB() {
 }
 
 /*
-   Configuration store:
+   config store:
      - id = "appConfig" for systemPrompt + JSON schemas + JSON-LD contexts
      - id = "llmApiCreds" for API baseURL + key
      - id = "model" for user-selected model
@@ -42,7 +42,7 @@ async function deleteConfigRecord(id) {
 }
 
 /*
-    Report store:
+    reports store:
      {
        id: <unique>,
        name: <string>,
