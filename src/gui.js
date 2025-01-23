@@ -15,7 +15,7 @@ function ui(divID) {
 `;
 
     const sourceCodeUrl = "https://github.com/jeyabbalas/medical-report-information-extractor";
-    const configFileDefault = "https://raw.githubusercontent.com/jeyabbalas/medical-report-information-extractor/refs/heads/main/examples/bcn_generations_pathology_data/config.json";
+    const configFileDefault = "https://raw.githubusercontent.com/jeyabbalas/medical-report-information-extractor/refs/heads/main/examples/bcn_generations_pathology_data/minConfig.json";
     const llmBaseUrlDefault = "https://api.openai.com/v1";
 
     divUI.innerHTML = `
@@ -42,8 +42,11 @@ function ui(divID) {
 <!-- Caution -->
 <div id="info" class="mx-auto max-w-7xl px-3 sm:px-6 py-2 sm:py-4 lg:px-8">
     <div id="info-usage" class="flex p-3 sm:p-4 mt-2 text-sm text-red-800 border border-red-300 rounded-lg bg-red-50" role="alert">
-        <svg aria-hidden="true" class="flex-shrink-0 inline w-4 h-4 sm:w-5 sm:h-5 mr-2 sm:mr-3" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+        <svg aria-hidden="true" class="flex-shrink-0 inline w-4 h-4 sm:w-5 sm:h-5 mr-2 sm:mr-3" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 
+            11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 
+            001 1h1a1 1 0 100-2v-3a1 1 0 
+            00-1-1H9z" clip-rule="evenodd"></path>
         </svg>
         <span class="sr-only">Data privacy notice</span>
         <div>
@@ -53,7 +56,7 @@ function ui(divID) {
     </div>
 </div>
 
-<!--LLM API config-->
+<!--Config-->
 <div id="config-container" class="mx-auto max-w-7xl mt-3 sm:mt-4 px-3 sm:px-6 lg:px-8 border rounded-lg">
     <div class="space-y-3 sm:space-y-5 pt-2 sm:pt-4">
         <div class="col-span-full">
@@ -65,9 +68,9 @@ function ui(divID) {
                         <div id="config-loading-bar" class="bg-green-500 h-full w-0 transition-all duration-200 ease-in"></div>
                     </div>
                     <label for="config-url" class="block text-xs font-medium text-gray-900">Configuration file URL</label>
-                    <input type="url" name="config-url" id="config-url" class="block w-full border-0 p-0 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-0 focus:border-0 text-sm sm:text-base sm:leading-6" placeholder="https://example.com/config.json" value=${configFileDefault} required>
+                    <input type="url" name="config-url" id="config-url" class="block w-full border-0 p-0 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-0 text-sm sm:text-base sm:leading-6" placeholder="https://example.com/config.json" value="${configFileDefault}" required>
                 </div>
-                <div id="config-error-message-container" class="w-full sm:w-3/4 md:w-2/3 lg:w-1/2"></div>
+                <div id="config-error-message-container" class="w-full sm:w-3/4 md:w-2/3 lg:w-1/2 hidden"></div>
             </div>
         </div>
 
@@ -79,13 +82,13 @@ function ui(divID) {
             <div class="mt-3 sm:mt-4 -space-y-px rounded-md flex flex-col items-center">
                 <div class="relative rounded-md rounded-b-none px-3 pb-1.5 pt-2.5 w-full sm:w-3/4 md:w-2/3 lg:w-1/2 ring-1 ring-inset ring-gray-300 focus-within:z-10 focus-within:ring-2 focus-within:ring-green-600">
                     <label for="llm-base-url" class="block text-xs font-medium text-gray-900">Base URL</label>
-                    <input type="url" name="llm-base-url" id="llm-base-url" class="block w-full border-0 p-0 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-0 focus:border-0 text-sm sm:text-base sm:leading-6" placeholder="http://localhost:8000/v1" value=${llmBaseUrlDefault} required>
+                    <input type="url" name="llm-base-url" id="llm-base-url" class="block w-full border-0 p-0 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-0 text-sm sm:text-base sm:leading-6" placeholder="http://localhost:8000/v1" value="${llmBaseUrlDefault}" required>
                 </div>
                 <div class="relative rounded-md rounded-t-none px-3 pb-1.5 pt-2.5 w-full sm:w-3/4 md:w-2/3 lg:w-1/2 ring-1 ring-inset ring-gray-300 focus-within:z-10 focus-within:ring-2 focus-within:ring-green-600">
                     <label for="llm-api-key" class="block text-xs font-medium text-gray-900">API key</label>
-                    <input type="password" name="llm-api-key" id="llm-api-key" class="block w-full border-0 p-0 text-gray-900 focus:outline-none focus:ring-0 focus:border-0 text-sm sm:text-base sm:leading-6">
+                    <input type="password" name="llm-api-key" id="llm-api-key" class="block w-full border-0 p-0 text-gray-900 focus:outline-none focus:ring-0 text-sm sm:text-base sm:leading-6">
                 </div>
-                <div id="api-key-message-container" class="w-full sm:w-3/4 md:w-2/3 lg:w-1/2"></div>
+                <div id="api-key-message-container" class="hidden w-full sm:w-3/4 md:w-2/3 lg:w-1/2"></div>
             </div>
         </div>
     
@@ -104,7 +107,7 @@ function ui(divID) {
             <div class="mt-3 sm:mt-4 -space-y-px rounded-md flex flex-col items-center">
                 <div class="relative rounded-md px-3 pb-1.5 pt-2.5 w-full sm:w-3/4 md:w-2/3 lg:w-1/2 ring-1 ring-inset ring-gray-300 focus-within:z-10 focus-within:ring-2 focus-within:ring-green-600">
                     <label for="llm-model" class="block text-xs font-medium text-gray-900">LLM model</label>
-                    <select id="llm-model" name="llm-model" class="block w-full border-0 p-0 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-0 focus:border-0 text-sm sm:text-base sm:leading-6">
+                    <select id="llm-model" name="llm-model" class="block w-full border-0 p-0 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-0 text-sm sm:text-base sm:leading-6">
                         <option value="" disabled selected>Set URL/API key above to see models list</option>
                     </select>
                 </div>
@@ -158,6 +161,7 @@ function ui(divID) {
         </div>
         <div id="file-upload-buttons" class="py-2 sm:py-4">
             <div class="flex flex-col sm:flex-row justify-center gap-2">
+                <button id="erase-data-btn" type="button" class="w-full sm:w-auto inline-flex justify-center rounded-md border border-transparent bg-red-800 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">Erase extracted data</button>
                 <button id="clear-btn" type="reset" class="w-full sm:w-auto rounded-md border border-gray-300 bg-white py-2 px-4 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">Clear</button>
                 <button id="submit-btn" type="submit" class="w-full sm:w-auto inline-flex justify-center rounded-md border border-transparent bg-green-800 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">Submit</button>
             </div>
@@ -176,9 +180,27 @@ function ui(divID) {
     </div>
 </div>
 
-<!-- Information extraction -->
+<!-- Information extraction + progress UI -->
 <div class="mx-auto max-w-7xl mt-3 sm:mt-4 px-3 sm:px-4 lg:px-8 mb-4 sm:mb-6 border rounded-lg">
     <div class="w-full md:w-11/12 lg:w-10/12 mx-auto">
+        <!-- Progress bar & revolve ring for extraction -->
+        <div id="extraction-progress-container" class="mt-3 hidden">
+            <div id="extraction-progress-bar-wrapper" class="w-full bg-gray-200 h-1 mb-2 rounded">
+                <div id="extraction-progress-bar" class="bg-green-500 h-full w-0 transition-all duration-200 ease-in"></div>
+            </div>
+            <div id="extraction-progress-label" class="text-sm text-gray-700"></div>
+            <div id="extraction-progress-ring" class="hidden mt-3 flex justify-center">
+                <div class="relative inline-flex items-center justify-center">
+                    <svg class="progress-ring" width="84" height="84">
+                        <circle class="progress-ring__circle" stroke="green" stroke-width="6" fill="transparent" r="36" cx="42" cy="42"/>
+                    </svg>
+                    <div class="progress-ring-text absolute text-sm sm:text-md text-green-600 font-semibold">
+                        <span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <div id="info-extraction" class="w-full mt-3 sm:mt-4 px-3 sm:px-4 lg:px-8"></div>
     </div>
 </div>

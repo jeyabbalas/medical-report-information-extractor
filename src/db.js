@@ -9,7 +9,7 @@ async function getOrCreateDB() {
                 db.createObjectStore('config', {keyPath: 'id'});
             }
 
-            // "reports" store: user-uploaded .txt files.
+            // "reports" store: user-uploaded reports, extracted data
             if (!db.objectStoreNames.contains('reports')) {
                 db.createObjectStore('reports', {keyPath: 'id'});
             }
@@ -43,7 +43,17 @@ async function deleteConfigRecord(id) {
 
 /*
     Report store:
-     { id: <unique>, name: <string>, content: <string> }
+     {
+       id: <unique>,
+       name: <string>,
+       content: <string>,
+       extractions?: [
+         {
+           schemaTitle: <string>,
+           data: <object> // LLM-extracted JSON for that schema
+         }
+       ]
+     }
 */
 
 async function putUploadedFile(fileRecord) {

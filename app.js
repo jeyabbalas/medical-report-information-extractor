@@ -21,6 +21,7 @@ const exampleReportUrls = [
     "https://raw.githubusercontent.com/jeyabbalas/medical-report-information-extractor/refs/heads/main/examples/bcn_generations_pathology_data/sample_reports/04.txt",
     "https://raw.githubusercontent.com/jeyabbalas/medical-report-information-extractor/refs/heads/main/examples/bcn_generations_pathology_data/sample_reports/05.txt"
 ];
+let extractionTerminated = false;
 
 /* -------------------------------------------------------------
  * CONFIGURATION FILE LOADING
@@ -250,8 +251,11 @@ async function loadConfig(configUrl) {
         setConfigErrorMessage('✓ Configuration files loaded successfully!');
         const container = document.getElementById('config-error-message-container');
         if (container) {
-            container.querySelector('.relative').classList.remove('bg-red-50', 'text-red-800', 'border-red-300');
-            container.querySelector('.relative').classList.add('bg-green-50', 'text-green-800', 'border-green-300');
+            const box = container.querySelector('.relative');
+            if (box) {
+                box.classList.remove('bg-red-50', 'text-red-800', 'border-red-300');
+                box.classList.add('bg-green-50', 'text-green-800', 'border-green-300');
+            }
         }
     } finally {
         hideConfigLoadingBar();
@@ -534,7 +538,8 @@ async function fetchAndStoreExampleFiles(urls) {
             await putUploadedFile({
                 id: `${Date.now()}-${Math.random()}`,
                 name: filename,
-                content: text
+                content: text,
+                extractions: []
             });
             completed++;
             updateFileUploadBar((completed / total) * 100);
@@ -753,7 +758,8 @@ async function handleFiles(fileList) {
         await putUploadedFile({
             id: `${Date.now()}-${Math.random()}`,
             name: file.name,
-            content: text
+            content: text,
+            extractions: []
         });
         completed++;
         updateFileUploadBar((completed / total) * 100);
@@ -790,6 +796,122 @@ async function initFileUpload() {
     displayFileList(filesInDb);
 }
 
+/* -------------------------------------------------------------
+ * INFORMATION EXTRACTION
+ * -------------------------------------------------------------
+ */
+
+
+async function getMissingInfo() {
+    const missing = [];
+
+    // Config
+    const appConfig = await getConfigRecord('appConfig');
+    if (!appConfig) {
+        missing.push('Application configuration file (config.json)');
+    } else {
+        if (!appConfig.systemPrompt) missing.push('System prompt in configuration file');
+        if (!appConfig.schemaFiles || !appConfig.schemaFiles.length) {
+            missing.push('At least one JSON Schema in configuration file');
+        }
+    }
+
+    // API creds
+    const creds = await getConfigRecord('llmApiCreds');
+    if (!creds || !creds.baseUrl || !creds.apiKey) {
+        missing.push('LLM API base URL and/or API key');
+    }
+
+    // Model
+    const modelRec = await getConfigRecord('model');
+    if (!modelRec || !modelRec.name) {
+        missing.push('LLM model selection');
+    }
+
+    // Uploaded files
+    const files = await getAllUploadedFiles();
+    if (!files || !files.length) {
+        missing.push('At least one uploaded report');
+    }
+
+    return missing;
+}
+
+
+function showMissingInfoModal(missingItems) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+
+        const modal = document.createElement('div');
+        modal.className = 'bg-white rounded-lg p-4 max-w-md w-full';
+        modal.innerHTML = `
+          <h2 class="text-lg font-semibold mb-2">Information Missing</h2>
+          <p class="mb-3">Please provide the following information before data extraction:</p>
+          <ul class="list-disc ml-6 mb-4">
+            ${missingItems.map(i => `<li>${i}</li>`).join('')}
+          </ul>
+          <div class="flex justify-end">
+            <button id="missing-modal-ok" class="bg-green-800 hover:bg-green-700 text-white px-4 py-2 rounded">
+              OK
+            </button>
+          </div>
+        `;
+
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
+        const closeBtn = modal.querySelector('#missing-modal-ok');
+        closeBtn.addEventListener('click', () => {
+            document.body.removeChild(overlay);
+            resolve();
+        });
+    });
+}
+
+
+function scrollToFirstMissingField(missingItem) {
+    if (!missingItem) return;
+    switch (true) {
+        case /config\.json/i.test(missingItem):
+        case /System prompt/i.test(missingItem):
+        case /JSON Schema/i.test(missingItem):
+            document.getElementById('config-url')?.scrollIntoView({behavior: 'smooth'});
+            break;
+        case /LLM API base URL/i.test(missingItem):
+        case /API key/i.test(missingItem):
+            document.getElementById('llm-base-url')?.scrollIntoView({behavior: 'smooth'});
+            break;
+        case /model selection/i.test(missingItem):
+            document.getElementById('llm-model')?.scrollIntoView({behavior: 'smooth'});
+            break;
+        case /uploaded report/i.test(missingItem):
+            document.getElementById('file-drop-area')?.scrollIntoView({behavior: 'smooth'});
+            break;
+        default:
+            window.scrollTo({top: 0, behavior: 'smooth'});
+            break;
+    }
+}
+
+
+/**
+ * The main extraction function:
+ *  1. Check for missing info. If any, show modal & scroll.
+ *  2. If all present, retrieve config & files, build prompts, call LLM, store results.
+ *  3. Use partial/resume by skipping schemas that are already extracted in `file.extractions`.
+ *  4. Show progress bar & revolve ring. If user terminates, stop calls.
+ */
+async function handleSubmitExtraction() {
+    const missing = await getMissingInfo();
+    if (missing.length > 0) {
+        await showMissingInfoModal(missing);
+        scrollToFirstMissingField(missing[0]);
+        return;
+    }
+}
+
+
 /*
  * -------------------------------------------------------------
  * MAIN APPLICATION LOGIC
@@ -801,13 +923,13 @@ async function init() {
 
     await initOpenAiCredentials();
 
-    // Model dropdown change listener
+    // Model dropdown selection
     const llmModelSelect = document.getElementById('llm-model');
     if (llmModelSelect) {
         llmModelSelect.addEventListener('change', handleModelSelectionChange);
     }
 
-    // Handle configuration URL input
+    // Configuration URL input
     const urlParams = new URLSearchParams(window.location.search);
     let paramUrl = urlParams.get('configUrl');
     const configInputEl = document.getElementById('config-url');
@@ -833,10 +955,9 @@ async function init() {
         });
     }
 
-    // Handle OpenAI API credentials form
+    // OpenAI API credentials form
     const submitApiKeyBtn = document.getElementById('submit-api-key');
     const forgetApiKeyBtn = document.getElementById('forget-api-key');
-
     if (submitApiKeyBtn) {
         submitApiKeyBtn.addEventListener('click', submitOpenAiCredentials);
     }
@@ -844,8 +965,20 @@ async function init() {
         forgetApiKeyBtn.addEventListener('click', forgetOpenAiCredentials);
     }
 
-    // Handle file upload
+    // File upload
     await initFileUpload();
+
+    // Information extraction
+    const submitBtn = document.getElementById('submit-btn');
+    if (submitBtn) {
+        submitBtn.addEventListener('click', handleSubmitExtraction);
+    }
+
+    // Erase/terminate extraction
+    const eraseDataBtn = document.getElementById('erase-data-btn');
+    if (eraseDataBtn) {
+        eraseDataBtn.addEventListener('click', handleEraseOrTerminate);
+    }
 }
 
 
