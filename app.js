@@ -958,7 +958,7 @@ async function handleSubmitExtraction() {
     }
 
     disableSubmitButton(true);
-    updateEraseDataButtonText('Terminate');
+    updateEraseDataButtonText('Stop');
     extractionTerminated = false;
     showExtractionProgressContainer(true);
 
@@ -978,11 +978,87 @@ async function handleSubmitExtraction() {
         const model = modelSelect.name;
 
         const reports = await getAllUploadedFiles();
+        const totalWork = reports.length * schemaFiles.length;
+        let completed = 0;
+        updateExtractionProgress(completed, totalWork);
+
+        for (const report of reports) {
+            if (extractionTerminated) break;
+        }
     } finally {
         disableSubmitButton(false);
         updateEraseDataButtonText('Erase extracted data');
         extractionTerminated = false;
         showExtractionProgressContainer(false);
+    }
+}
+
+
+function isExtractionInProgress() {
+    // if submit button is disabled, extraction must be in progress
+    const submitBtn = document.getElementById('submit-btn');
+    return submitBtn && submitBtn.disabled;
+}
+
+
+function showEraseDataConfirmationModal() {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+
+        const modal = document.createElement('div');
+        modal.className = 'bg-white rounded-lg p-4 max-w-md w-full';
+        modal.innerHTML = `
+          <h2 class="text-lg font-semibold mb-2">Erase All Extracted Data?</h2>
+          <p class="mb-4">This action will permanently remove all extracted information from the database. This cannot be undone.</p>
+          <div class="flex justify-end gap-2">
+            <button id="erase-cancel" class="border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2 rounded">
+              Cancel
+            </button>
+            <button id="erase-confirm" class="bg-red-800 hover:bg-red-700 text-white px-4 py-2 rounded">
+              Erase
+            </button>
+          </div>
+        `;
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
+        const cancelBtn = modal.querySelector('#erase-cancel');
+        const confirmBtn = modal.querySelector('#erase-confirm');
+
+        cancelBtn.addEventListener('click', () => {
+            document.body.removeChild(overlay);
+            resolve(false);
+        });
+        confirmBtn.addEventListener('click', () => {
+            document.body.removeChild(overlay);
+            resolve(true);
+        });
+    });
+}
+
+
+async function handleEraseOrTerminate() {
+    if (isExtractionInProgress()) {
+        extractionTerminated = true;
+        updateEraseDataButtonText('Stopping...', true);
+        return;
+    }
+
+    // If not in progress, interpret as "Erase extracted data"
+    const confirmed = await showEraseDataConfirmationModal();
+    if (!confirmed) return;
+
+    // User confirms to erase all extracted data
+    try {
+        const files = await getAllUploadedFiles();
+        for (const file of files) {
+            file.extractions = [];
+            await putUploadedFile(file);
+        }
+        console.log('All extracted data removed.');
+    } catch (err) {
+        console.error('Error erasing extracted data:', err);
     }
 }
 
