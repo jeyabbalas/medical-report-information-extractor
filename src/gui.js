@@ -61,7 +61,7 @@ function ui(divID) {
     <div class="space-y-3 sm:space-y-5 pt-2 sm:pt-4">
         <div class="col-span-full">
             <h2 class="text-base sm:text-lg font-semibold leading-7 text-gray-900">Application configuration</h2>
-            <p class="mt-1 text-sm leading-6 text-gray-600">Please provide the application config.json URL. The file must specify the following properties: <span class="font-mono bg-gray-100 px-1 rounded">systemPrompt</span> URL pointing to the LLM task instruction file, <span class="font-mono bg-gray-100 px-1 rounded">schemaFiles</span> URLs to JSON Schema files describing the metadata of the information to extract, and optionally <span class="font-mono bg-gray-100 px-1 rounded">jsonldContextFiles</span> URLs to JSON-LD context files that map schema elements to standardized vocabularies.</p>
+            <p class="mt-1 text-sm leading-6 text-gray-600">Provide the URL to the application configuration JSON file. The JSON file must specify the following properties—</p> <ul class="pl-4"><li class="list-disc text-sm text-gray-600"><span class="font-mono bg-gray-100 px-1 rounded">systemPrompt</span>: URL pointing to the LLM task instruction file</li> <li class="list-disc text-sm text-gray-600"><span class="font-mono bg-gray-100 px-1 rounded">schemaFiles</span>: URL or array of URLs to JSON Schema files describing the metadata of the information to extract</li> <li class="list-disc text-sm text-gray-600"><span class="font-mono bg-gray-100 px-1 rounded">jsonldContextFiles</span> (optional): URL or array of URLs to JSON-LD context files (one for each specified schema file) that map schema variables to standardized vocabularies</li></ul> <p class="mt-1 text-sm leading-6 text-gray-600">See example configuration file for the <a target="_blank" href="${configFileDefault}" class="underline text-green-700 text-sm">BCN Generations Study Pathology Data Dictionary</a>.</p>
             <div class="mt-3 sm:mt-4 -space-y-px rounded-md flex flex-col items-center">
                 <div class="relative rounded-md px-3 pb-1.5 pt-2.5 w-full sm:w-3/4 md:w-2/3 lg:w-1/2 ring-1 ring-inset ring-gray-300 focus-within:z-10 focus-within:ring-2 focus-within:ring-green-600">
                     <div id="config-loading-bar-wrapper" class="hidden w-full bg-gray-200 h-1 mb-2 overflow-hidden rounded">
@@ -78,7 +78,7 @@ function ui(divID) {
 
         <div class="col-span-full">
             <h2 class="text-base sm:text-lg font-semibold leading-7 text-gray-900">LLM API configuration</h2>
-            <p class="mt-1 text-sm leading-6 text-gray-600">Provide the base URL for your LLM API endpoint and its associated API key. The endpoint must be compatible with OpenAI's <a href="https://platform.openai.com/docs/api-reference/chat" class="underline text-green-700">Chat API structure</a>.</p>
+            <p class="mt-1 text-sm leading-6 text-gray-600">Provide the base URL of your LLM API endpoint and the associated API key. The endpoint must be compatible with OpenAI's API structure, requiring the <a target="_blank" class="underline text-green-700 text-sm font-mono" href="https://platform.openai.com/docs/api-reference/models">models</a> and <a target="_blank" class="underline text-green-700 text-sm font-mono" href="https://platform.openai.com/docs/api-reference/chat/create">chat/completions</a> endpoints. For example, to use the OpenAI API, set the base URL to <span class="font-mono px-1 rounded">https://api.openai.com/v1</span> and the API key can be generated at <a target="_blank" class="underline text-green-700 text-sm" href="https://platform.openai.com/api-keys">OpenAI API keys</a>. Optionally, an LLM can be self-hosted via an OpenAI-compatible API using tools like <a target="_blank" class="underline text-green-700 text-sm" href="https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html">vLLM</a>.</p>
             <div class="mt-3 sm:mt-4 -space-y-px rounded-md flex flex-col items-center">
                 <div class="relative rounded-md rounded-b-none px-3 pb-1.5 pt-2.5 w-full sm:w-3/4 md:w-2/3 lg:w-1/2 ring-1 ring-inset ring-gray-300 focus-within:z-10 focus-within:ring-2 focus-within:ring-green-600">
                     <label for="llm-base-url" class="block text-xs font-medium text-gray-900">Base URL</label>
@@ -122,7 +122,7 @@ function ui(divID) {
     <div class="space-y-4 sm:space-y-6 pt-2 sm:pt-4">
         <div class="col-span-full">
             <h2 class="text-base sm:text-lg font-semibold leading-7 text-gray-900">Upload text reports</h2>
-            <p class="mt-1 text-sm leading-6 text-gray-600">Only TXT files are supported. Please ensure that the data is completely deidentified if the data use agreement requires it.</p>
+            <p class="mt-1 text-sm leading-6 text-gray-600">Only TXT files are supported. Please ensure that the uploaded data is aligned to the associated data use agreement (e.g. requiring deidentification).</p>
             <div id="file-drop-area" class="mt-2 flex justify-center rounded-lg border border-dashed border-gray-900/25 px-3 sm:px-6 py-6 sm:py-10">
                 <div class="text-center">
                     <div id="file-upload-icon">
