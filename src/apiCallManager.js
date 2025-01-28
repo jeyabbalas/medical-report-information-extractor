@@ -93,4 +93,30 @@ class AdaptiveRateLimiter {
 
         return totalMs;
     }
+
+    handleError(error) {
+        const now = Date.now();
+        this.consecutiveErrors++;
+        this.lastErrorTime = now;
+
+        // Exponential backoff with jitter
+        this.currentBackoff = Math.min(
+            this.maxBackoffTime,
+            this.currentBackoff * this.backoffMultiplier * (1 + Math.random() * 0.1)
+        );
+
+        // If it's a rate limit error, enforce a minimum wait time
+        if (error.response?.status === 429) {
+            this.currentBackoff = Math.max(this.currentBackoff, 5000);
+        }
+
+        return this.currentBackoff;
+    }
+
+    resetErrorCount() {
+        if (this.consecutiveErrors > 0 && Date.now() - this.lastErrorTime > this.windowDuration) {
+            this.consecutiveErrors = 0;
+            this.currentBackoff = this.minBackoffTime;
+        }
+    }
 }
