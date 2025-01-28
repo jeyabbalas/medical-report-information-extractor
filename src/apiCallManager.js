@@ -120,3 +120,46 @@ class AdaptiveRateLimiter {
         }
     }
 }
+
+
+class ParallelRateLimiter extends AdaptiveRateLimiter {
+    constructor(options = {}) {
+        super(options);
+
+        this.hasKnownLimits = false;
+        this.safeParallelLimit = 1; // Default to 1 parallel request (sequential)
+        this.rateLimitConfidence = 0; // Number of responses confirmed rate limits
+    }
+
+    updateLimitsFromHeaders(headers) {
+        const limits = super.updateLimitsFromHeaders(headers);
+
+        const hasAllHeaders = !!(
+            limits.requestLimit &&
+            limits.requestRemaining &&
+            limits.requestReset
+        );
+
+        if (hasAllHeaders) {
+            this.rateLimitConfidence++;
+            if (this.rateLimitConfidence >= 2) { // Need 2 responses to confirm rate limits
+                this.hasKnownLimits = true;
+                // Calculate safe parallel limit based on remaining requests capacity
+                const resetTimeInSeconds = limits.requestReset / 1000;
+                const requestsPerSecond = limits.requestLimit / 60;
+                const safeRequestsPerSecond = requestsPerSecond * 0.8; // 80% of limit for safety
+                this.safeParallelLimit = Math.max(1, Math.floor(safeRequestsPerSecond * resetTimeInSeconds));
+            }
+        }
+
+        return limits;
+    }
+
+    canProcessInParallel() {
+        return this.hasKnownLimits && this.safeParallelLimit > 1;
+    }
+
+    getParallelLimit() {
+        return this.safeParallelLimit;
+    }
+}
