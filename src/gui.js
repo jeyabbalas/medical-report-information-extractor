@@ -61,7 +61,7 @@ function ui(divID) {
     <div class="space-y-3 sm:space-y-5 pt-2 sm:pt-4">
         <div class="col-span-full">
             <h2 class="text-base sm:text-lg font-semibold leading-7 text-gray-900">Application configuration</h2>
-            <p class="mt-1 text-sm leading-6 text-gray-600">Provide the URL to the application configuration JSON file. The JSON file must specify the following properties—</p> <ul class="pl-4"><li class="list-disc text-sm text-gray-600"><span class="font-mono bg-gray-100 px-1 rounded">systemPrompt</span>: URL pointing to the LLM task instruction file</li> <li class="list-disc text-sm text-gray-600"><span class="font-mono bg-gray-100 px-1 rounded">schemaFiles</span>: URL or array of URLs to JSON Schema files describing the metadata of the information to extract</li> <li class="list-disc text-sm text-gray-600"><span class="font-mono bg-gray-100 px-1 rounded">jsonldContextFiles</span> (optional): URL or array of URLs to JSON-LD context files (one for each specified schema file) that map schema variables to standardized vocabularies</li></ul> <p class="mt-1 text-sm leading-6 text-gray-600">See example configuration file for the <a target="_blank" href="${configFileDefault}" class="underline text-green-700 text-sm">BCN Generations Study Pathology Data Dictionary</a>.</p>
+            <p class="mt-1 text-sm leading-6 text-gray-600">Provide the URL to the application configuration JSON file. The JSON file must specify the following properties—</p> <ul class="pl-4"><li class="list-disc text-sm text-gray-600"><span class="font-mono bg-gray-100 px-1 rounded">systemPrompt</span>: URL pointing to the LLM task instruction file.</li> <li class="list-disc text-sm text-gray-600"><span class="font-mono bg-gray-100 px-1 rounded">schemaFiles</span>: URL or array of URLs to JSON Schema files describing the metadata of the information to extract.</li> <li class="list-disc text-sm text-gray-600"><span class="font-mono bg-gray-100 px-1 rounded">jsonldContextFiles</span> (optional): URL or array of URLs to JSON-LD context files (one for each specified schema file) that map schema variables to standardized vocabularies.</li></ul> <p class="mt-1 text-sm leading-6 text-gray-600">See example configuration file for the <a target="_blank" href="${configFileDefault}" class="underline text-green-700 text-sm">BCN Generations Study Pathology Data Dictionary</a>.</p>
             <div class="mt-3 sm:mt-4 -space-y-px rounded-md flex flex-col items-center">
                 <div class="relative rounded-md px-3 pb-1.5 pt-2.5 w-full sm:w-3/4 md:w-2/3 lg:w-1/2 ring-1 ring-inset ring-gray-300 focus-within:z-10 focus-within:ring-2 focus-within:ring-green-600">
                     <div id="config-loading-bar-wrapper" class="hidden w-full bg-gray-200 h-1 mb-2 overflow-hidden rounded">
@@ -189,16 +189,6 @@ function ui(divID) {
                 <div id="extraction-progress-bar" class="bg-green-500 h-full w-0 transition-all duration-200 ease-in"></div>
             </div>
             <div id="extraction-progress-label" class="text-sm text-gray-700"></div>
-            <div id="extraction-progress-ring" class="hidden mt-3 flex justify-center">
-                <div class="relative inline-flex items-center justify-center">
-                    <svg class="progress-ring" width="84" height="84">
-                        <circle class="progress-ring__circle" stroke="green" stroke-width="6" fill="transparent" r="36" cx="42" cy="42"/>
-                    </svg>
-                    <div class="progress-ring-text absolute text-sm sm:text-md text-green-600 font-semibold">
-                        <span></span>
-                    </div>
-                </div>
-            </div>
         </div>
         
         <div id="info-extraction" class="w-full mt-3 sm:mt-4 px-3 sm:px-4 lg:px-8"></div>
