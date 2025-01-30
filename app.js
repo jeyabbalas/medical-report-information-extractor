@@ -1,6 +1,12 @@
 import {ui} from './src/gui.js';
 import {validateJsonSchema} from './src/jsonSchemaUtils.js';
-import {validateJsonLd, buildPlainTable, buildLinkedTable} from './src/jsonLdUtils.js';
+import {
+    validateJsonLd,
+    buildPlainTable,
+    generateJsonLdDocForFileName,
+    buildTabularJsonLdDoc,
+    buildLinkedTable
+} from './src/jsonLdUtils.js';
 import {
     saveConfigRecord,
     getConfigRecord,
@@ -1047,7 +1053,7 @@ function combineExtractedData(reports) {
                 });
             }
             acc.push({
-                filename: r.name,
+                fileName: r.name,
                 ...merged
             });
         }
@@ -1056,7 +1062,7 @@ function combineExtractedData(reports) {
 }
 
 
-function createDownloadDataButton(buttonLabel, data) {
+function createDownloadDataButton(buttonLabel, data, isLinkedData = false) {
     const btnContainer = document.createElement('div');
     btnContainer.id = 'downloadBtnContainer';
     btnContainer.className = 'flex justify-center w-full my-2';
@@ -1065,11 +1071,14 @@ function createDownloadDataButton(buttonLabel, data) {
     downloadBtn.className = 'inline-flex justify-center rounded-md border border-transparent bg-green-800 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2';
     downloadBtn.textContent = buttonLabel;
     downloadBtn.addEventListener('click', (e) => {
-        const modelName = document.getElementById('llm-model').value || 'model';
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
         const dlAnchorElem = document.createElement('a');
         dlAnchorElem.setAttribute("href", dataStr);
-        dlAnchorElem.setAttribute("download", `extracted_information-${modelName}.json`);
+        if (isLinkedData) {
+            dlAnchorElem.setAttribute("download", `extracted_information.jsonld`);
+        } else {
+            dlAnchorElem.setAttribute("download", `extracted_information.json`);
+        }
         dlAnchorElem.click();
     });
 
@@ -1097,6 +1106,31 @@ function displayExtractedData(data) {
 }
 
 
+function prepareJsonLdDoc(jsonLdContextFiles, tabularData) {
+    const jsonLdContextFilesCopy = jsonLdContextFiles.slice();
+    jsonLdContextFilesCopy.push(generateJsonLdDocForFileName());
+    return buildTabularJsonLdDoc(jsonLdContextFilesCopy, tabularData);
+}
+
+
+function clearDisplayedJsonLdDoc() {
+    const jsonLdContainer = document.getElementById('jsonld-doc');
+    if (jsonLdContainer) {
+        jsonLdContainer.innerHTML = '';
+    }
+}
+
+
+async function displayJsonLdDoc(jsonLdDoc) {
+    const jsonLdContainer = document.getElementById('standardization');
+    if (jsonLdContainer) {
+        clearDisplayedJsonLdDoc();
+        await buildLinkedTable(jsonLdContainer, jsonLdDoc);
+        jsonLdContainer.appendChild(createDownloadDataButton('Download JSON-LD', jsonLdDoc, true));
+    }
+}
+
+
 async function handleSubmitExtraction() {
     const missing = await getMissingInfo();
     if (missing.length > 0) {
@@ -1104,6 +1138,9 @@ async function handleSubmitExtraction() {
         scrollToFirstMissingField(missing[0]);
         return;
     }
+
+    clearDisplayedExtractedData();
+    clearDisplayedJsonLdDoc();
 
     disableSubmitButton(true);
     updateEraseDataButtonText('Stop');
@@ -1164,6 +1201,17 @@ async function handleSubmitExtraction() {
         const allReports = await getAllUploadedFiles();
         const combinedData = combineExtractedData(allReports);
         displayExtractedData(combinedData);
+
+        if (appConfig.jsonldContextFiles) {
+            const jsonLdDoc = prepareJsonLdDoc(appConfig.jsonldContextFiles, combinedData);
+            await displayJsonLdDoc(jsonLdDoc);
+        } else {
+            const jsonLdContainer = document.getElementById('standardization');
+            if (jsonLdContainer) {
+                jsonLdContainer.innerHTML = '<p class="text-lg text-gray-600">JSON-LD context files are required in the application configuration to generate a JSON-LD document.</p>';
+            }
+        }
+
     } finally {
         disableSubmitButton(false);
         updateEraseDataButtonText('Erase extracted data');
@@ -1231,6 +1279,7 @@ async function handleEraseOrTerminate() {
     // User confirms to erase all extracted data
     try {
         clearDisplayedExtractedData();
+        clearDisplayedJsonLdDoc();
         const files = await getAllUploadedFiles();
         for (const file of files) {
             file.extractions = [];

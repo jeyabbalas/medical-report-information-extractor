@@ -75,7 +75,7 @@ async function buildLinkedTable(container, jsonLdDoc) {
     const outerWrapper = document.createElement('div');
     outerWrapper.className = 'min-h-fit max-h-96 w-full' // fixed max table height
     const shadowWrapper = document.createElement('div');
-    shadowWrapper.className = 'shadow-md rounded-lg h-full'; // shadow and rounded corners
+    shadowWrapper.className = 'shadow-sm rounded-lg h-full'; // shadow and rounded corners
     const tableWrapper = document.createElement('div');
     tableWrapper.className = 'relative overflow-auto h-full rounded-lg border border-gray-200'; // scrollable
     const stickyWrapper = document.createElement('div');
@@ -349,4 +349,34 @@ function buildPlainTable(data, headers) {
 }
 
 
-export {validateJsonLd, buildLinkedTable, buildPlainTable};
+function generateJsonLdDocForFileName() {
+    return {
+        '@context': {
+            'nfo': 'http://www.semanticdesktop.org/ontologies/2007/03/22/nfo#',
+            'fileName': 'nfo:fileName'
+        }
+    };
+}
+
+
+function aggregateJsonLdContexts(jsonLdDocs) {
+    const allContexts = jsonLdDocs.map(doc => doc['@context']);
+    return allContexts.reduce((acc, context) => {
+        Object.keys(context).forEach(key => {
+            if (!acc[key]) acc[key] = context[key];
+        });
+        return acc;
+    }, {});
+}
+
+
+function buildTabularJsonLdDoc(jsonLdContextDocs, tabularJson) {
+    const context = aggregateJsonLdContexts(jsonLdContextDocs);
+    return {
+        '@context': context,
+        '@graph': tabularJson
+    };
+}
+
+
+export {validateJsonLd, generateJsonLdDocForFileName, buildTabularJsonLdDoc, buildLinkedTable, buildPlainTable};
