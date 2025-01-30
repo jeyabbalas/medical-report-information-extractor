@@ -1,7 +1,6 @@
 class AdaptiveRateLimiter {
     constructor(options = {}) {
         // API use limits
-        // Defaults are from OpenAI's free-tier (https://platform.openai.com/docs/guides/rate-limits?context=tier-free) at the time of coding.
         this.maxRequestsPerMinute = options.maxRequestsPerMinute || 3;
 
         // Exponential backoff parameters
@@ -163,3 +162,6 @@ class ParallelRateLimiter extends AdaptiveRateLimiter {
         return this.safeParallelLimit;
     }
 }
+
+
+export { AdaptiveRateLimiter, ParallelRateLimiter };
