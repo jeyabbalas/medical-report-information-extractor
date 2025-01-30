@@ -1036,13 +1036,6 @@ async function performLLMExtraction(developerPrompt, userQuery, model) {
 }
 
 
-/**
- * The main extraction function:
- *  1. Check for missing info. If any, show modal & scroll.
- *  2. If all present, retrieve config & files, build prompts, call LLM, store results.
- *  3. Use partial/resume by skipping schemas that are already extracted in `file.extractions`.
- *  4. Show progress bar & revolve ring. If user terminates, stop calls.
- */
 async function handleSubmitExtraction() {
     const missing = await getMissingInfo();
     if (missing.length > 0) {
@@ -1083,19 +1076,53 @@ async function handleSubmitExtraction() {
 
             const developerPrompt = buildDeveloperPrompt(systemPrompt, report.content);
 
-            for (const schema of schemaFiles) {
+            for (let i = 0; i < schemaFiles.length; i++) {
                 if (extractionTerminated) break;
 
-                // skip if we already have an extraction for this schema
+                const schema = schemaFiles[i];
+                const schemaId = i;
+
+                // skip if we've already extracted this schema
+                const existing = report.extractions.find(e => e.schemaId === schemaId);
+                if (existing) {
+                    completed++;
+                    updateExtractionProgress(completed, totalWork);
+                    continue;
+                }
 
                 const userQuery = buildUserQuery(schema);
                 const data = await performLLMExtraction(developerPrompt, userQuery, model);
-                report.extractions.push({schema, data});
+                report.extractions.push({schemaId, data});
                 await putUploadedFile(report);
 
                 completed++;
                 updateExtractionProgress(completed, totalWork);
             }
+        }
+
+        const allReports = await getAllUploadedFiles();
+        const combinedData = allReports.map(r => {
+            const merged = {};
+            if (r.extractions && r.extractions.length) {
+                for (const extraction of r.extractions) {
+                    const dataObj = extraction.data || {};
+                    Object.entries(dataObj).forEach(([key, value]) => {
+                        merged[key] = value;
+                    });
+                }
+            }
+
+            return {
+                filename: r.name,
+                ...merged
+            }
+        });
+
+        const tableContainer = document.getElementById('info-extraction');
+        const headers = Array.from(new Set(combinedData.flatMap(d => Object.keys(d))));
+        if (tableContainer) {
+            tableContainer.innerHTML = '';
+            tableContainer.appendChild(buildPlainTable(combinedData, headers));
         }
     } finally {
         disableSubmitButton(false);
