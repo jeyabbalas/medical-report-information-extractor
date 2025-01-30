@@ -191,7 +191,7 @@ function ui(divID) {
             <div id="extraction-progress-label" class="text-sm text-gray-700"></div>
         </div>
         
-        <div id="info-extraction" class="w-full mt-3 sm:mt-4 px-3 sm:px-4 lg:px-8"></div>
+        <div id="info-extraction" class="w-full my-3 sm:mt-4 px-3 sm:px-4 lg:px-8"></div>
     </div>
 </div>
   
@@ -209,7 +209,7 @@ function ui(divID) {
 <!-- Data standardization -->
 <div class="mx-auto max-w-7xl mt-3 sm:mt-4 px-3 sm:px-4 lg:px-8 mb-4 sm:mb-6 border rounded-lg">
     <div class="w-full md:w-11/12 lg:w-10/12 mx-auto">
-        <div id="standardization" class="w-full mt-3 sm:mt-4 px-3 sm:px-4 lg:px-8"></div>
+        <div id="standardization" class="w-full my-3 sm:mt-4 px-3 sm:px-4 lg:px-8"></div>
     </div>
 </div>
     `;

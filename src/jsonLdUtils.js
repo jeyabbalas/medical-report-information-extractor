@@ -279,7 +279,7 @@ function buildPlainTable(data, headers) {
     const outerWrapper = document.createElement('div');
     outerWrapper.className = 'min-h-fit max-h-96 w-full' // fixed max table height
     const shadowWrapper = document.createElement('div');
-    shadowWrapper.className = 'shadow-md rounded-lg h-full'; // shadow and rounded corners
+    shadowWrapper.className = 'shadow-sm rounded-lg h-full'; // shadow and rounded corners
     const tableWrapper = document.createElement('div');
     tableWrapper.className = 'relative overflow-auto h-full rounded-lg border border-gray-200'; // scrollable
     const stickyWrapper = document.createElement('div');

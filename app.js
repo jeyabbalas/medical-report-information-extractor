@@ -1036,6 +1036,67 @@ async function performLLMExtraction(developerPrompt, userQuery, model) {
 }
 
 
+function combineExtractedData(reports) {
+    return reports.map(r => {
+        const merged = {};
+        if (r.extractions && r.extractions.length) {
+            for (const extraction of r.extractions) {
+                const dataObj = extraction.data || {};
+                Object.entries(dataObj).forEach(([key, value]) => {
+                    merged[key] = value;
+                });
+            }
+        }
+
+        return {
+            filename: r.name,
+            ...merged
+        }
+    });
+}
+
+
+function createDownloadDataButton(buttonLabel, data) {
+    const btnContainer = document.createElement('div');
+    btnContainer.id = 'downloadBtnContainer';
+    btnContainer.className = 'flex justify-center w-full my-2';
+
+    const downloadBtn = document.createElement('button');
+    downloadBtn.className = 'inline-flex justify-center rounded-md border border-transparent bg-green-800 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2';
+    downloadBtn.textContent = buttonLabel;
+    downloadBtn.addEventListener('click', (e) => {
+        const modelName = document.getElementById('llm-model').value || 'model';
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
+        const dlAnchorElem = document.createElement('a');
+        dlAnchorElem.setAttribute("href", dataStr);
+        dlAnchorElem.setAttribute("download", `extracted_information-${modelName}.json`);
+        dlAnchorElem.click();
+    });
+
+    btnContainer.appendChild(downloadBtn);
+    return btnContainer;
+}
+
+
+function clearDisplayedExtractedData() {
+    const tableContainer = document.getElementById('info-extraction');
+    if (tableContainer) {
+        tableContainer.innerHTML = '';
+    }
+}
+
+
+function displayExtractedData(data) {
+    const tableContainer = document.getElementById('info-extraction');
+    if (tableContainer) {
+        clearDisplayedExtractedData();
+        const headers = Array.from(new Set(data.flatMap(d => Object.keys(d))));
+        tableContainer.appendChild(buildPlainTable(data, headers));
+        tableContainer.appendChild(createDownloadDataButton('Download as JSON', data));
+    }
+}
+
+
 async function handleSubmitExtraction() {
     const missing = await getMissingInfo();
     if (missing.length > 0) {
@@ -1101,29 +1162,9 @@ async function handleSubmitExtraction() {
         }
 
         const allReports = await getAllUploadedFiles();
-        const combinedData = allReports.map(r => {
-            const merged = {};
-            if (r.extractions && r.extractions.length) {
-                for (const extraction of r.extractions) {
-                    const dataObj = extraction.data || {};
-                    Object.entries(dataObj).forEach(([key, value]) => {
-                        merged[key] = value;
-                    });
-                }
-            }
-
-            return {
-                filename: r.name,
-                ...merged
-            }
-        });
-
-        const tableContainer = document.getElementById('info-extraction');
-        const headers = Array.from(new Set(combinedData.flatMap(d => Object.keys(d))));
-        if (tableContainer) {
-            tableContainer.innerHTML = '';
-            tableContainer.appendChild(buildPlainTable(combinedData, headers));
-        }
+        const combinedData = combineExtractedData(allReports);
+        console.log('All data extracted:', combinedData);
+        displayExtractedData(combinedData);
     } finally {
         disableSubmitButton(false);
         updateEraseDataButtonText('Erase extracted data');
@@ -1190,6 +1231,7 @@ async function handleEraseOrTerminate() {
 
     // User confirms to erase all extracted data
     try {
+        clearDisplayedExtractedData();
         const files = await getAllUploadedFiles();
         for (const file of files) {
             file.extractions = [];
