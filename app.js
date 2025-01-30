@@ -1037,22 +1037,22 @@ async function performLLMExtraction(developerPrompt, userQuery, model) {
 
 
 function combineExtractedData(reports) {
-    return reports.map(r => {
-        const merged = {};
-        if (r.extractions && r.extractions.length) {
+    return reports.reduce((acc, r) => {
+        if (r.extractions && r.extractions.length > 0) {
+            const merged = {};
             for (const extraction of r.extractions) {
                 const dataObj = extraction.data || {};
                 Object.entries(dataObj).forEach(([key, value]) => {
                     merged[key] = value;
                 });
             }
+            acc.push({
+                filename: r.name,
+                ...merged
+            });
         }
-
-        return {
-            filename: r.name,
-            ...merged
-        }
-    });
+        return acc;
+    }, []);
 }
 
 
@@ -1163,7 +1163,6 @@ async function handleSubmitExtraction() {
 
         const allReports = await getAllUploadedFiles();
         const combinedData = combineExtractedData(allReports);
-        console.log('All data extracted:', combinedData);
         displayExtractedData(combinedData);
     } finally {
         disableSubmitButton(false);
