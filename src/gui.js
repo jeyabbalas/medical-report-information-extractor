@@ -32,7 +32,7 @@ function ui(divID) {
         </div>
       
         <div class="flex md:mt-0 md:ml-4 shrink-0">
-            <a title="Source code" href="${sourceCodeUrl}">
+            <a title="Source code" target="_blank" href="${sourceCodeUrl}">
                 <img src="${githubLogoUrl}" class="h-8 w-8 sm:h-14 sm:w-14 fill-current" alt="github logo" />
             </a>
         </div>
@@ -161,7 +161,6 @@ function ui(divID) {
         </div>
         <div id="file-upload-buttons" class="py-2 sm:py-4">
             <div class="flex flex-col sm:flex-row justify-center gap-2">
-                <button id="erase-data-btn" type="button" class="w-full sm:w-auto inline-flex justify-center rounded-md border border-transparent bg-red-800 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">Erase extracted data</button>
                 <button id="clear-btn" type="reset" class="w-full sm:w-auto rounded-md border border-gray-300 bg-white py-2 px-4 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">Clear</button>
                 <button id="submit-btn" type="submit" class="w-full sm:w-auto inline-flex justify-center rounded-md border border-transparent bg-green-800 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">Submit</button>
             </div>

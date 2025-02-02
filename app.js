@@ -778,6 +778,7 @@ async function handleFiles(fileList) {
     displayFileList(allFiles);
 }
 
+
 async function initFileUpload() {
     const fileUploadContainer = document.getElementById('file-upload-container');
     if (fileUploadContainer) {
@@ -786,7 +787,6 @@ async function initFileUpload() {
             <div id="file-upload-loading-bar" class="bg-green-500 h-full w-0 transition-all duration-200 ease-in"></div>
           </div>
         `);
-
         fileUploadBarWrapper = document.getElementById('file-upload-loading-bar-wrapper');
         fileUploadBar = document.getElementById('file-upload-loading-bar');
     }
@@ -794,6 +794,28 @@ async function initFileUpload() {
     const clearBtn = document.getElementById('clear-btn');
     if (clearBtn) {
         clearBtn.addEventListener('click', async () => {
+            if (isExtractionInProgress()) {
+                extractionTerminated = true;
+                updateClearButtonState('Stopping...', true);
+                return;
+            }
+
+            if (clearBtn.textContent === 'Erase extracted data') {
+                const confirmed = await showEraseDataConfirmationModal();
+                if (!confirmed) return;
+
+                clearDisplayedExtractedData();
+                clearDisplayedJsonLdDoc();
+                const files = await getAllUploadedFiles();
+                for (const file of files) {
+                    file.extractions = [];
+                    await putUploadedFile(file);
+                }
+
+                updateClearButtonState('Clear', false);
+                return;
+            }
+
             await clearUploadedFiles();
             displayFileList([]);
         });
@@ -925,13 +947,24 @@ function disableSubmitButton(disable) {
 }
 
 
-function updateEraseDataButtonText(text, disabled = false) {
-    const eraseBtn = document.getElementById('erase-data-btn');
-    if (!eraseBtn) return;
-    eraseBtn.textContent = text;
-    eraseBtn.disabled = disabled;
-    eraseBtn.classList.toggle('opacity-50', disabled);
-    eraseBtn.classList.toggle('cursor-not-allowed', disabled);
+function updateClearButtonState(text, disabled = false) {
+    const clearBtn = document.getElementById('clear-btn');
+    if (!clearBtn) return;
+
+    clearBtn.disabled = disabled;
+
+    clearBtn.classList.remove(
+        'bg-white', 'text-gray-700', 'hover:bg-gray-50', 'border-gray-300',
+        'bg-red-800', 'text-white', 'hover:bg-red-700'
+    );
+
+    if (text === 'Clear') {
+        clearBtn.classList.add('bg-white', 'text-gray-700', 'hover:bg-gray-50', 'border-gray-300');
+    } else {
+        clearBtn.classList.add('bg-red-800', 'text-white', 'hover:bg-red-700');
+    }
+
+    clearBtn.textContent = text;
 }
 
 
@@ -1070,7 +1103,7 @@ function createDownloadDataButton(buttonLabel, data, isLinkedData = false) {
     const downloadBtn = document.createElement('button');
     downloadBtn.className = 'inline-flex justify-center rounded-md border border-transparent bg-green-800 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2';
     downloadBtn.textContent = buttonLabel;
-    downloadBtn.addEventListener('click', (e) => {
+    downloadBtn.addEventListener('click', (_) => {
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
         const dlAnchorElem = document.createElement('a');
         dlAnchorElem.setAttribute("href", dataStr);
@@ -1101,7 +1134,7 @@ function displayExtractedData(data) {
         clearDisplayedExtractedData();
         const headers = Array.from(new Set(data.flatMap(d => Object.keys(d))));
         tableContainer.appendChild(buildPlainTable(data, headers));
-        tableContainer.appendChild(createDownloadDataButton('Download as JSON', data));
+        tableContainer.appendChild(createDownloadDataButton('Download JSON', data));
     }
 }
 
@@ -1114,7 +1147,7 @@ function prepareJsonLdDoc(jsonLdContextFiles, tabularData) {
 
 
 function clearDisplayedJsonLdDoc() {
-    const jsonLdContainer = document.getElementById('jsonld-doc');
+    const jsonLdContainer = document.getElementById('standardization');
     if (jsonLdContainer) {
         jsonLdContainer.innerHTML = '';
     }
@@ -1141,9 +1174,8 @@ async function handleSubmitExtraction() {
 
     clearDisplayedExtractedData();
     clearDisplayedJsonLdDoc();
-
     disableSubmitButton(true);
-    updateEraseDataButtonText('Stop');
+    updateClearButtonState('Stop');
     extractionTerminated = false;
     showExtractionProgressContainer(true);
 
@@ -1154,7 +1186,7 @@ async function handleSubmitExtraction() {
 
         if (!appConfig || !creds || !modelSelect) {
             // This should never happen
-            console.error(`Required information for data extraction is missing. Aborting. Re-fill the application form and click 'Submit' again.`);
+            console.error(`Required information for data extraction is missing. Aborting.`);
             return;
         }
 
@@ -1169,7 +1201,6 @@ async function handleSubmitExtraction() {
 
         for (const report of reports) {
             if (extractionTerminated) break;
-
             if (!report.extractions) report.extractions = [];
 
             const developerPrompt = buildDeveloperPrompt(systemPrompt, report.content);
@@ -1180,7 +1211,6 @@ async function handleSubmitExtraction() {
                 const schema = schemaFiles[i];
                 const schemaId = i;
 
-                // skip if we've already extracted this schema
                 const existing = report.extractions.find(e => e.schemaId === schemaId);
                 if (existing) {
                     completed++;
@@ -1190,6 +1220,7 @@ async function handleSubmitExtraction() {
 
                 const userQuery = buildUserQuery(schema);
                 const data = await performLLMExtraction(developerPrompt, userQuery, model);
+
                 report.extractions.push({schemaId, data});
                 await putUploadedFile(report);
 
@@ -1197,24 +1228,29 @@ async function handleSubmitExtraction() {
                 updateExtractionProgress(completed, totalWork);
             }
         }
-
+        // JSON data
         const allReports = await getAllUploadedFiles();
         const combinedData = combineExtractedData(allReports);
         displayExtractedData(combinedData);
 
+        // JSON-LD document
         if (appConfig.jsonldContextFiles) {
             const jsonLdDoc = prepareJsonLdDoc(appConfig.jsonldContextFiles, combinedData);
             await displayJsonLdDoc(jsonLdDoc);
         } else {
             const jsonLdContainer = document.getElementById('standardization');
             if (jsonLdContainer) {
-                jsonLdContainer.innerHTML = '<p class="text-lg text-gray-600">JSON-LD context files are required in the application configuration to generate a JSON-LD document.</p>';
+                jsonLdContainer.innerHTML = `
+                    <p class="text-lg text-gray-600">
+                        JSON-LD context files are required in the config
+                        to generate a JSON-LD document.
+                    </p>`;
             }
         }
 
     } finally {
         disableSubmitButton(false);
-        updateEraseDataButtonText('Erase extracted data');
+        updateClearButtonState('Erase extracted data');
         extractionTerminated = false;
         showExtractionProgressContainer(false);
     }
@@ -1262,33 +1298,6 @@ function showEraseDataConfirmationModal() {
             resolve(true);
         });
     });
-}
-
-
-async function handleEraseOrTerminate() {
-    if (isExtractionInProgress()) {
-        extractionTerminated = true;
-        updateEraseDataButtonText('Stopping...', true);
-        return;
-    }
-
-    // If not in progress, interpret as "Erase extracted data"
-    const confirmed = await showEraseDataConfirmationModal();
-    if (!confirmed) return;
-
-    // User confirms to erase all extracted data
-    try {
-        clearDisplayedExtractedData();
-        clearDisplayedJsonLdDoc();
-        const files = await getAllUploadedFiles();
-        for (const file of files) {
-            file.extractions = [];
-            await putUploadedFile(file);
-        }
-        console.log('All extracted data removed.');
-    } catch (err) {
-        console.error('Error erasing extracted data:', err);
-    }
 }
 
 
@@ -1352,12 +1361,6 @@ async function init() {
     const submitBtn = document.getElementById('submit-btn');
     if (submitBtn) {
         submitBtn.addEventListener('click', handleSubmitExtraction);
-    }
-
-    // Erase/terminate extraction
-    const eraseDataBtn = document.getElementById('erase-data-btn');
-    if (eraseDataBtn) {
-        eraseDataBtn.addEventListener('click', handleEraseOrTerminate);
     }
 }
 
