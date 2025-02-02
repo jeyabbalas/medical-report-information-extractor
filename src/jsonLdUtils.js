@@ -407,7 +407,7 @@ function aggregateJsonLdContexts(jsonLdDocs) {
 }
 
 
-function buildTabularJsonLdDoc(jsonLdContextDocs, tabularJson, provenanceDoc) {
+function buildTabularJsonLdDoc(schemaFileUrls, jsonLdContextDocs, tabularJson, provenanceDoc) {
     jsonLdContextDocs.push(provenanceDoc);
     const context = aggregateJsonLdContexts(jsonLdContextDocs);
 
@@ -418,11 +418,25 @@ function buildTabularJsonLdDoc(jsonLdContextDocs, tabularJson, provenanceDoc) {
             return obj;
         }, {});
 
-    return {
+    let jsonLdDoc = {
         '@context': context,
         '@graph': tabularJson,
         ...provenanceData
     };
+
+    if (schemaFileUrls.length === 1) {
+        jsonLdDoc = {
+            '$schema': schemaFileUrls[0],
+            ...jsonLdDoc
+        };
+    } else if (schemaFileUrls.length > 1) {
+        jsonLdDoc = {
+            '$schemas': schemaFileUrls,
+            ...jsonLdDoc
+        };
+    }
+
+    return jsonLdDoc;
 }
 
 

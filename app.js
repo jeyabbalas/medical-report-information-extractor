@@ -241,6 +241,7 @@ async function loadConfig(configUrl) {
         const configToSave = {
             id: 'appConfig',
             systemPrompt: systemPromptText,
+            schemaFileUrls: schemaFileUrls,
             schemaFiles: parsedSchemas,
             jsonldContextFiles: parsedJsonLds
         };
@@ -1140,13 +1141,13 @@ function displayExtractedData(data) {
 }
 
 
-function prepareJsonLdDoc(jsonLdContextFiles, tabularData, provenance = {}) {
+function prepareJsonLdDoc(schemaFileUrls, jsonLdContextFiles, tabularData, provenance = {}) {
     const jsonLdContextFilesCopy = jsonLdContextFiles.slice();
     jsonLdContextFilesCopy.push(generateJsonLdDocForFileName());
     const provenanceDoc = generateJsonLdDocForProvenance(
         provenance.startedAtTime, provenance.endedAtTime,
         provenance.applicationURL, provenance.chatCompletionsEndpoint, provenance.modelName);
-    return buildTabularJsonLdDoc(jsonLdContextFilesCopy, tabularData, provenanceDoc);
+    return buildTabularJsonLdDoc(schemaFileUrls, jsonLdContextFilesCopy, tabularData, provenanceDoc);
 }
 
 
@@ -1244,6 +1245,7 @@ async function handleSubmitExtraction() {
 
         // JSON-LD document
         if (appConfig.jsonldContextFiles) {
+            const schemaFileUrls = appConfig.schemaFileUrls || [];
             const provenance = {
                 startedAtTime,
                 endedAtTime,
@@ -1251,7 +1253,9 @@ async function handleSubmitExtraction() {
                 chatCompletionsEndpoint: creds.baseUrl + '/chat/completions',
                 modelName: model
             }
-            const jsonLdDoc = prepareJsonLdDoc(appConfig.jsonldContextFiles, combinedData, provenance);
+            const jsonLdDoc = prepareJsonLdDoc(
+                schemaFileUrls, appConfig.jsonldContextFiles, combinedData, provenance
+            );
             await displayJsonLdDoc(jsonLdDoc);
         } else {
             const jsonLdContainer = document.getElementById('standardization');
