@@ -42,15 +42,23 @@ async function validateJsonLd(jsonLdDoc) {
 async function buildLinkedTable(container, jsonLdDoc) {
     container.innerHTML = "";
 
+    const jsonLdDocCopy = JSON.parse(JSON.stringify(jsonLdDoc));
+    const keys = Object.keys(jsonLdDocCopy);
+    for (const key of keys) {
+        if (key !== '@graph' && key !== '@context') {
+            delete jsonLdDocCopy[key];
+        }
+    }
+
     // JSON dataset
-    const jsonData = jsonLdDoc["@graph"] || [];
+    const jsonData = jsonLdDocCopy["@graph"] || [];
     const headers =
-        jsonLdDoc["@graph"].length > 1 ? Object.keys(jsonLdDoc["@graph"][0]) : [];
+        jsonLdDocCopy["@graph"].length > 1 ? Object.keys(jsonLdDocCopy["@graph"][0]) : [];
 
     // Expand JSON-LD data (integrate @context into the @graph data)
     let expandedDoc;
     try {
-        expandedDoc = await jsonld.expand(jsonLdDoc);
+        expandedDoc = await jsonld.expand(jsonLdDocCopy);
     } catch (err) {
         console.error("Error expanding JSON-LD:", err);
         container.appendChild(buildPlainTable(jsonData, headers));
@@ -64,7 +72,7 @@ async function buildLinkedTable(container, jsonLdDoc) {
     // propertyName -> propertyIri map
     let propertyNameIriMap = {};
     try {
-        propertyNameIriMap = await buildPropertyNameIriMap(jsonLdDoc['@context'], headers);
+        propertyNameIriMap = await buildPropertyNameIriMap(jsonLdDocCopy['@context'], headers);
     } catch (err) {
         // Not fatal; we can still display a table, just no links for property headers
         console.warn('Error building property name → IRI map:', err);
