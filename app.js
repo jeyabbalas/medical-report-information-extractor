@@ -4,6 +4,7 @@ import {
     validateJsonLd,
     buildPlainTable,
     generateJsonLdDocForFileName,
+    generateJsonLdDocForProvenance,
     buildTabularJsonLdDoc,
     buildLinkedTable
 } from './src/jsonLdUtils.js';
@@ -1139,10 +1140,13 @@ function displayExtractedData(data) {
 }
 
 
-function prepareJsonLdDoc(jsonLdContextFiles, tabularData) {
+function prepareJsonLdDoc(jsonLdContextFiles, tabularData, provenance = {}) {
     const jsonLdContextFilesCopy = jsonLdContextFiles.slice();
     jsonLdContextFilesCopy.push(generateJsonLdDocForFileName());
-    return buildTabularJsonLdDoc(jsonLdContextFilesCopy, tabularData);
+    const provenanceDoc = generateJsonLdDocForProvenance(
+        provenance.startedAtTime, provenance.endedAtTime,
+        provenance.applicationURL, provenance.chatCompletionsEndpoint, provenance.modelName);
+    return buildTabularJsonLdDoc(jsonLdContextFilesCopy, tabularData, provenanceDoc);
 }
 
 
@@ -1199,6 +1203,8 @@ async function handleSubmitExtraction() {
         let completed = 0;
         updateExtractionProgress(completed, totalWork);
 
+        const startedAtTime = new Date(Date.now()).toISOString();
+
         for (const report of reports) {
             if (extractionTerminated) break;
             if (!report.extractions) report.extractions = [];
@@ -1228,6 +1234,9 @@ async function handleSubmitExtraction() {
                 updateExtractionProgress(completed, totalWork);
             }
         }
+
+        const endedAtTime = new Date(Date.now()).toISOString();
+
         // JSON data
         const allReports = await getAllUploadedFiles();
         const combinedData = combineExtractedData(allReports);
@@ -1235,7 +1244,14 @@ async function handleSubmitExtraction() {
 
         // JSON-LD document
         if (appConfig.jsonldContextFiles) {
-            const jsonLdDoc = prepareJsonLdDoc(appConfig.jsonldContextFiles, combinedData);
+            const provenance = {
+                startedAtTime,
+                endedAtTime,
+                applicationURL: window.location.href,
+                chatCompletionsEndpoint: creds.baseUrl + '/chat/completions',
+                modelName: model
+            }
+            const jsonLdDoc = prepareJsonLdDoc(appConfig.jsonldContextFiles, combinedData, provenance);
             await displayJsonLdDoc(jsonLdDoc);
         } else {
             const jsonLdContainer = document.getElementById('standardization');

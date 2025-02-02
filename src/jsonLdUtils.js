@@ -359,6 +359,43 @@ function generateJsonLdDocForFileName() {
 }
 
 
+function generateJsonLdDocForProvenance(startedAtTime, endedAtTime, applicationURL, chatCompletionsEndpoint, modelName) {
+    return {
+        '@context': {
+            'prov': 'http://www.w3.org/ns/prov#',
+            'xsd': 'http://www.w3.org/2001/XMLSchema#',
+            'schema': 'https://schema.org/'
+        },
+        '@type': 'prov:Entity',
+        'prov:wasGeneratedBy': {
+            '@type': 'prov:Activity',
+            'prov:startedAtTime': {
+                '@type': 'xsd:dateTime',
+                '@value': startedAtTime
+            },
+            'prov:endedAtTime': {
+                '@type': 'xsd:dateTime',
+                '@value': endedAtTime
+            },
+            'prov:wasAssociatedWith': {
+                '@id': applicationURL,
+                '@type': 'prov:SoftwareAgent',
+                'prov:label': 'Medical Report Information Extractor',
+                'schema:description': 'A Web application that leverages large language models to extract structured information from from free-text reports.'
+            },
+            'prov:used': [
+                {
+                    '@id': chatCompletionsEndpoint,
+                    '@type': 'prov:Entity',
+                    'schema:softwareVersion': modelName,
+                    'schema:description': 'A large language model.'
+                }
+            ]
+        }
+    }
+}
+
+
 function aggregateJsonLdContexts(jsonLdDocs) {
     const allContexts = jsonLdDocs.map(doc => doc['@context']);
     return allContexts.reduce((acc, context) => {
@@ -370,13 +407,23 @@ function aggregateJsonLdContexts(jsonLdDocs) {
 }
 
 
-function buildTabularJsonLdDoc(jsonLdContextDocs, tabularJson) {
+function buildTabularJsonLdDoc(jsonLdContextDocs, tabularJson, provenanceDoc) {
+    jsonLdContextDocs.push(provenanceDoc);
     const context = aggregateJsonLdContexts(jsonLdContextDocs);
+
+    const provenanceData = Object.keys(provenanceDoc)
+        .filter(key => key !== '@context')
+        .reduce((obj, key) => {
+            obj[key] = provenanceDoc[key];
+            return obj;
+        }, {});
+
     return {
         '@context': context,
-        '@graph': tabularJson
+        '@graph': tabularJson,
+        ...provenanceData
     };
 }
 
 
-export {validateJsonLd, generateJsonLdDocForFileName, buildTabularJsonLdDoc, buildLinkedTable, buildPlainTable};
+export {validateJsonLd, generateJsonLdDocForFileName, generateJsonLdDocForProvenance, buildTabularJsonLdDoc, buildLinkedTable, buildPlainTable};
