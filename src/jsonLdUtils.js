@@ -415,9 +415,34 @@ function aggregateJsonLdContexts(jsonLdDocs) {
 }
 
 
+function generateJsonLdDocForSchemas(schemaFileUrls) {
+    return {
+        '@context': {
+            'dct': 'http://purl.org/dc/terms/',
+            'conformsTo': {
+                '@id': 'dct:conformsTo',
+                '@type': '@id'
+            }
+        },
+        'conformsTo': schemaFileUrls
+    }
+}
+
+
 function buildTabularJsonLdDoc(schemaFileUrls, jsonLdContextDocs, tabularJson, provenanceDoc) {
-    jsonLdContextDocs.push(provenanceDoc);
-    const context = aggregateJsonLdContexts(jsonLdContextDocs);
+    const jsonLdContextDocsCopy = JSON.parse(JSON.stringify(jsonLdContextDocs));
+    const schemaDoc = generateJsonLdDocForSchemas(schemaFileUrls);
+
+    jsonLdContextDocsCopy.push(schemaDoc);
+    jsonLdContextDocsCopy.push(provenanceDoc);
+    const context = aggregateJsonLdContexts(jsonLdContextDocsCopy);
+
+    const schemaData = Object.keys(schemaDoc)
+        .filter(key => key !== '@context')
+        .reduce((obj, key) => {
+            obj[key] = schemaDoc[key];
+            return obj;
+        }, {});
 
     const provenanceData = Object.keys(provenanceDoc)
         .filter(key => key !== '@context')
@@ -426,25 +451,12 @@ function buildTabularJsonLdDoc(schemaFileUrls, jsonLdContextDocs, tabularJson, p
             return obj;
         }, {});
 
-    let jsonLdDoc = {
+    return {
         '@context': context,
         '@graph': tabularJson,
+        ...schemaData,
         ...provenanceData
-    };
-
-    if (schemaFileUrls.length === 1) {
-        jsonLdDoc = {
-            '$schema': schemaFileUrls[0],
-            ...jsonLdDoc
-        };
-    } else if (schemaFileUrls.length > 1) {
-        jsonLdDoc = {
-            '$schemas': schemaFileUrls,
-            ...jsonLdDoc
-        };
     }
-
-    return jsonLdDoc;
 }
 
 
