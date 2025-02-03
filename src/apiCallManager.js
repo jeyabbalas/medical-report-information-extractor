@@ -1,6 +1,6 @@
 class AdaptiveRateLimiter {
     constructor(options = {}) {
-        // API use limits
+        // Basic rate-limiting configuration
         this.maxRequestsPerMinute = options.maxRequestsPerMinute || 3;
 
         // Exponential backoff parameters
@@ -12,7 +12,7 @@ class AdaptiveRateLimiter {
         this.requestWindow = [];
         this.windowDuration = 60000; // 1 minute
 
-        // Dynamic rate adjustment
+        // Dynamic rate/backoff tracking
         this.currentBackoff = this.minBackoffTime;
         this.consecutiveErrors = 0;
         this.lastErrorTime = null;
@@ -20,13 +20,12 @@ class AdaptiveRateLimiter {
 
     async enforceRateLimit() {
         const now = Date.now();
-
-        // Clean up timestamps outside the window duration
+        // Clean up timestamps outside the 60-sec window
         this.requestWindow = this.requestWindow.filter(entry => entry > now - this.windowDuration);
 
         // Rate limit violation
         if (this.requestWindow.length >= this.maxRequestsPerMinute) {
-            // Wait until the oldest request in the window falls outside the window duration
+            // Wait until the oldest request in the window is out of windowDuration
             const oldestRequest = this.requestWindow[0];
             const waitTime = oldestRequest + this.windowDuration - now;
             if (waitTime > 0) {
@@ -34,63 +33,12 @@ class AdaptiveRateLimiter {
             }
         }
 
-        // Log current request timestamp
-        this.requestWindow.push(now);
+        // Record the new request
+        this.requestWindow.push(Date.now());
     }
 
     async sleep(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
-    }
-
-    updateLimitsFromHeaders(headers) {
-        // OpenAI headers: https://platform.openai.com/docs/guides/rate-limits?context=tier-one#rate-limits-in-headers
-        const limits = {
-            requestLimit: parseInt(headers['x-ratelimit-limit-requests']),
-            requestRemaining: parseInt(headers['x-ratelimit-remaining-requests']),
-            requestReset: this.parseTimeStringToMs(headers['x-ratelimit-reset-requests'])
-        };
-
-        // Update internal limits if headers are present
-        if (!isNaN(limits.requestLimit)) {
-            this.maxRequestsPerMinute = limits.requestLimit;
-        }
-
-        // Adjust backoff if we're close to limits
-        if (!isNaN(limits.requestRemaining) && limits.requestLimit) {
-            const remainingPercent = limits.requestRemaining / limits.requestLimit;
-            if (remainingPercent < 0.1) { // Less than 10% remaining
-                this.currentBackoff = Math.min(
-                    this.maxBackoffTime,
-                    this.currentBackoff * this.backoffMultiplier
-                );
-            }
-        }
-
-        return limits;
-    }
-
-    parseTimeStringToMs(timeStr) {
-        if (!timeStr) return null;
-
-        const timeUnitToMsMap = {
-            'ns': 1e-6,      // Nanoseconds to milliseconds
-            'μs': 1e-3,      // Microseconds to milliseconds
-            'ms': 1,         // Milliseconds
-            's': 1000,       // Seconds to milliseconds
-            'm': 60000,      // Minutes to milliseconds
-            'h': 3600000     // Hours to milliseconds
-        };
-
-        let totalMs = 0;
-        const regex = /(\d+)(ns|μs|ms|s|m|h)/g;
-        let match;
-
-        while ((match = regex.exec(timeStr)) !== null) {
-            const [_, value, unit] = match;
-            totalMs += parseInt(value) * timeUnitToMsMap[unit];
-        }
-
-        return totalMs;
     }
 
     handleError(error) {
@@ -104,7 +52,7 @@ class AdaptiveRateLimiter {
             this.currentBackoff * this.backoffMultiplier * (1 + Math.random() * 0.1)
         );
 
-        // If it's a rate limit error, enforce a minimum wait time
+        // If it's a rate limit error, enforce a minimum wait
         if (error.response?.status === 429) {
             this.currentBackoff = Math.max(this.currentBackoff, 5000);
         }
@@ -113,6 +61,7 @@ class AdaptiveRateLimiter {
     }
 
     resetErrorCount() {
+        // If time since last error is > window duration, reset
         if (this.consecutiveErrors > 0 && Date.now() - this.lastErrorTime > this.windowDuration) {
             this.consecutiveErrors = 0;
             this.currentBackoff = this.minBackoffTime;
@@ -121,47 +70,89 @@ class AdaptiveRateLimiter {
 }
 
 
-class ParallelRateLimiter extends AdaptiveRateLimiter {
+class DynamicConcurrentScheduler {
     constructor(options = {}) {
-        super(options);
+        this.apiCallFn = options.apiCallFn;
+        this.rateLimiter = new AdaptiveRateLimiter(options.rateLimiterOpts || {});
+        this.concurrency = options.initialConcurrency || 1;
+        this.maxConcurrency = options.maxConcurrency || 10;
 
-        this.hasKnownLimits = false;
-        this.safeParallelLimit = 1; // Default to 1 parallel request (sequential)
-        this.rateLimitConfidence = 0; // Number of responses confirmed rate limits
+        // User clicks the "Stop" button
+        this.terminated = false;
+
+        this.successfulCallsSinceLastError = 0;
+        this.maxSuccessfulCallsBeforeIncrease = 5; // Number of successful calls needed before increasing concurrency
     }
 
-    updateLimitsFromHeaders(headers) {
-        const limits = super.updateLimitsFromHeaders(headers);
+    terminate() {
+        this.terminated = true;
+    }
 
-        const hasAllHeaders = !!(
-            limits.requestLimit &&
-            limits.requestRemaining &&
-            limits.requestReset
-        );
+    async run(tasks, onTaskDone, onBatchComplete) {
+        let index = 0;
+        while (index < tasks.length && !this.terminated) {
+            const batch = tasks.slice(index, index + this.concurrency);
+            await this.runBatch(batch, onTaskDone);
 
-        if (hasAllHeaders) {
-            this.rateLimitConfidence++;
-            if (this.rateLimitConfidence >= 2) { // Need 2 responses to confirm rate limits
-                this.hasKnownLimits = true;
-                // Calculate safe parallel limit based on remaining requests capacity
-                const resetTimeInSeconds = limits.requestReset / 1000;
-                const requestsPerSecond = limits.requestLimit / 60;
-                const safeRequestsPerSecond = requestsPerSecond * 0.8; // 80% of limit for safety
-                this.safeParallelLimit = Math.max(1, Math.floor(safeRequestsPerSecond * resetTimeInSeconds));
+            if (this.terminated) break;
+
+            index += batch.length;
+            if (typeof onBatchComplete === 'function') {
+                onBatchComplete();
             }
         }
-
-        return limits;
     }
 
-    canProcessInParallel() {
-        return this.hasKnownLimits && this.safeParallelLimit > 1;
+    async runBatch(batch, onTaskDone) {
+        const promises = batch.map(task => this.runTask(task, onTaskDone));
+        await Promise.all(promises);
     }
 
-    getParallelLimit() {
-        return this.safeParallelLimit;
+    async runTask(task, onTaskDone) {
+        if (this.terminated) return;
+
+        let result;
+        let error = null;
+
+        try {
+            // Basic rate-limiting
+            await this.rateLimiter.enforceRateLimit();
+
+            // Make the actual call
+            result = await this.apiCallFn(task);
+
+            // No error => increment success count
+            this.successfulCallsSinceLastError++;
+            // Check if we can double the concurrency
+            if (
+                this.successfulCallsSinceLastError >= this.maxSuccessfulCallsBeforeIncrease &&
+                this.concurrency < this.maxConcurrency
+            ) {
+                this.concurrency = Math.min(this.concurrency * 2, this.maxConcurrency);
+                this.successfulCallsSinceLastError = 0;
+            }
+
+            this.rateLimiter.resetErrorCount();
+
+        } catch (e) {
+            error = e;
+            // Error => backoff
+            const backoffTime = this.rateLimiter.handleError(e);
+
+            // Halve concurrency if above 1
+            if (this.concurrency > 1) {
+                this.concurrency = Math.floor(this.concurrency / 2) || 1;
+            }
+            this.successfulCallsSinceLastError = 0;
+
+            await this.rateLimiter.sleep(backoffTime);
+        }
+
+        if (typeof onTaskDone === 'function') {
+            onTaskDone(task, result, error);
+        }
     }
 }
 
 
-export { AdaptiveRateLimiter, ParallelRateLimiter };
+export {AdaptiveRateLimiter, DynamicConcurrentScheduler};

@@ -16,13 +16,14 @@ import {
     getAllUploadedFiles,
     clearUploadedFiles
 } from './src/db.js';
-import {AdaptiveRateLimiter} from './src/apiCallManager.js';
+import {DynamicConcurrentScheduler} from './src/apiCallManager.js';
 
 import {OpenAI} from 'https://cdn.skypack.dev/openai@4.78.1?min';
 
 
 let openaiClient = null;
-const rateLimiter = new AdaptiveRateLimiter();
+let extractionTerminated = false;
+let concurrencyScheduler = null;
 
 const exampleReportUrls = [
     "https://raw.githubusercontent.com/jeyabbalas/medical-report-information-extractor/refs/heads/main/examples/bcn_generations_pathology_data/sample_reports/01.txt",
@@ -31,7 +32,7 @@ const exampleReportUrls = [
     "https://raw.githubusercontent.com/jeyabbalas/medical-report-information-extractor/refs/heads/main/examples/bcn_generations_pathology_data/sample_reports/04.txt",
     "https://raw.githubusercontent.com/jeyabbalas/medical-report-information-extractor/refs/heads/main/examples/bcn_generations_pathology_data/sample_reports/05.txt"
 ];
-let extractionTerminated = false;
+
 
 /* -------------------------------------------------------------
  * CONFIGURATION FILE LOADING
@@ -781,6 +782,14 @@ async function handleFiles(fileList) {
 }
 
 
+function stopExtraction() {
+    extractionTerminated = true;
+    if (concurrencyScheduler) {
+        concurrencyScheduler.terminate();
+    }
+}
+
+
 async function initFileUpload() {
     const fileUploadContainer = document.getElementById('file-upload-container');
     if (fileUploadContainer) {
@@ -797,7 +806,7 @@ async function initFileUpload() {
     if (clearBtn) {
         clearBtn.addEventListener('click', async () => {
             if (isExtractionInProgress()) {
-                extractionTerminated = true;
+                stopExtraction();
                 updateClearButtonState('Stopping...', true);
                 return;
             }
@@ -985,15 +994,21 @@ function showExtractionProgressContainer(show) {
 }
 
 
-function updateExtractionProgress(current, total) {
+function updateExtractionProgress(completedTasks, totalTasks, completedReports, totalReports) {
     const bar = document.getElementById('extraction-progress-bar');
     const label = document.getElementById('extraction-progress-label');
+
     let pct = 0;
-    if (total > 0) {
-        pct = Math.round((current / total) * 100);
+    if (totalTasks > 0) {
+        pct = Math.round((completedTasks / totalTasks) * 100);
     }
-    if (bar) bar.style.width = pct + '%';
-    if (label) label.textContent = total > 0 ? `Extracting ${current} of ${total}...` : '';
+    if (bar) {
+        bar.style.width = pct + '%';
+    }
+
+    if (label) {
+        label.textContent = `Extracting ${completedReports} of ${totalReports} reports...`;
+    }
 }
 
 
@@ -1045,7 +1060,6 @@ async function performLLMExtraction(developerPrompt, userQuery, model) {
                 seed: 1234 + attempt
             });
 
-            rateLimiter.updateLimitsFromHeaders(response.headers || {});
             rateLimiter.resetErrorCount();
 
             const message = response.choices?.[0]?.message?.content || '';
@@ -1169,6 +1183,115 @@ async function displayJsonLdDoc(jsonLdDoc) {
 }
 
 
+async function callOpenAiForExtraction(task) {
+    const { report, schema, model, systemPrompt } = task;
+
+    const developerPrompt = buildDeveloperPrompt(systemPrompt, report.content);
+    const userQuery = buildUserQuery(schema);
+
+    const regex = /```json\s*([\s\S]*?)\s*```/;
+    let attempt = 0;
+
+    while (attempt < 3 && !extractionTerminated) {
+        try {
+            const response = await openaiClient.chat.completions.create({
+                model: model,
+                messages: [
+                    { role: 'developer', content: developerPrompt },
+                    { role: 'user', content: userQuery }
+                ],
+                temperature: 0.0,
+                seed: 1234 + attempt
+            });
+
+            const message = response.choices?.[0]?.message?.content || '';
+            const match = message.match(regex);
+            if (match) {
+                try {
+                    return JSON.parse(match[1]);
+                } catch (err) {
+                    console.warn(`Attempt ${attempt+1}: failed to parse JSON from LLM output.`, err);
+                }
+            }
+        } catch (err) {
+            // If the error is 401 or 403, handle auth
+            if (err.response && (err.response.status === 401 || err.response.status === 403)) {
+                const authError = new Error('Authentication error');
+                authError.isAuthError = true;
+                throw authError;
+            }
+            // Otherwise, throw so concurrency manager can handle backoff
+            throw err;
+        }
+        attempt++;
+    }
+
+    // fallback if no valid JSON
+    return {};
+}
+
+
+async function buildExtractionTasks(reports, schemaFiles, systemPrompt, model) {
+    const tasks = [];
+    for (const report of reports) {
+        const extractedBySchemaId = new Set();
+        if (report.extractions && Array.isArray(report.extractions)) {
+            for (const e of report.extractions) {
+                const hasSomeKeys = e.data && Object.keys(e.data).length > 0;
+                if (hasSomeKeys) {
+                    extractedBySchemaId.add(e.schemaId);
+                }
+            }
+        }
+
+        for (let i = 0; i < schemaFiles.length; i++) {
+            const schema = schemaFiles[i];
+            if (!extractedBySchemaId.has(i)) {
+                tasks.push({
+                    report,
+                    schema,
+                    schemaId: i,
+                    systemPrompt,
+                    model
+                });
+            }
+        }
+    }
+    return tasks;
+}
+
+
+async function displayExtractedResults(appConfig, startedAtTime) {
+    // JSON data
+    const allReports = await getAllUploadedFiles();
+    const combinedData = combineExtractedData(allReports);
+    displayExtractedData(combinedData);
+
+    // JSON-LD
+    if (appConfig?.jsonldContextFiles) {
+        const creds = await getConfigRecord('llmApiCreds');
+        const modelRec = await getConfigRecord('model');
+        if (creds && modelRec) {
+            const endedAtTime = new Date().toISOString();
+            const provenance = {
+                startedAtTime,
+                endedAtTime,
+                applicationURL: window.location.href,
+                chatCompletionsEndpoint: creds.baseUrl + '/chat/completions',
+                modelName: modelRec.name
+            };
+            const jsonLdDoc = prepareJsonLdDoc(
+                appConfig.schemaFileUrls || [],
+                appConfig.jsonldContextFiles,
+                combinedData,
+                provenance
+            );
+            await displayJsonLdDoc(jsonLdDoc);
+        }
+    }
+}
+
+
 async function handleSubmitExtraction() {
     const missing = await getMissingInfo();
     if (missing.length > 0) {
@@ -1184,91 +1307,121 @@ async function handleSubmitExtraction() {
     extractionTerminated = false;
     showExtractionProgressContainer(true);
 
-    try {
-        const appConfig = await getConfigRecord('appConfig');
-        const creds = await getConfigRecord('llmApiCreds');
-        const modelSelect = await getConfigRecord('model');
+    let appConfig, creds, modelRec, reports;
+    const startedAtTime = new Date().toISOString();
 
-        if (!appConfig || !creds || !modelSelect) {
-            // This should never happen
-            console.error(`Required information for data extraction is missing. Aborting.`);
+    let totalTasks = 0, completedTasks = 0;
+    let totalReports = 0;
+    let completedReports = 0;
+    let schemasPerReport = 0;
+
+    const reportTaskCountMap = new Map(); // report id -> # of tasks completed for that report
+
+    try {
+        appConfig = await getConfigRecord('appConfig');
+        creds = await getConfigRecord('llmApiCreds');
+        modelRec = await getConfigRecord('model');
+        if (!appConfig || !creds || !modelRec) {
+            console.error('Missing configuration or credentials; aborting.');
             return;
         }
 
-        const systemPrompt = appConfig.systemPrompt;
-        const schemaFiles = appConfig.schemaFiles;
-        const model = modelSelect.name;
+        reports = await getAllUploadedFiles();
+        totalReports = reports.length;
+        schemasPerReport = appConfig.schemaFiles.length;
 
-        const reports = await getAllUploadedFiles();
-        const totalWork = reports.length * schemaFiles.length;
-        let completed = 0;
-        updateExtractionProgress(completed, totalWork);
+        // Build tasks; skip those that are already done
+        const tasks = await buildExtractionTasks(
+            reports,
+            appConfig.schemaFiles,
+            appConfig.systemPrompt,
+            modelRec.name
+        );
+        totalTasks = tasks.length;
 
-        const startedAtTime = new Date(Date.now()).toISOString();
+        if (totalTasks === 0) {
+            console.log('All schemas for all reports are already extracted. Displaying results...');
+            await displayExtractedResults(appConfig, startedAtTime);
+            return;
+        }
 
+        // Concurrency manager for incomplete tasks
+        concurrencyScheduler = new DynamicConcurrentScheduler({
+            initialConcurrency: 1,
+            maxConcurrency: 50,
+            apiCallFn: callOpenAiForExtraction
+        });
+
+        // Pre-fill with schemas already extracted
         for (const report of reports) {
-            if (extractionTerminated) break;
+            let extractedCount = 0;
+            if (report.extractions && Array.isArray(report.extractions)) {
+                for (const e of report.extractions) {
+                    const hasSomeKeys = e.data && Object.keys(e.data).length > 0;
+                    if (hasSomeKeys) {
+                        extractedCount++;
+                    }
+                }
+            }
+            reportTaskCountMap.set(report.id, extractedCount);
+            if (extractedCount === schemasPerReport) {
+                completedReports++;
+            }
+        }
+
+        completedTasks = Array.from(reportTaskCountMap.values())
+            .reduce((acc, val) => acc + val, 0);
+
+        updateExtractionProgress(completedTasks, totalTasks + completedTasks, completedReports, totalReports);
+
+        const onTaskDone = async (task, result, error) => {
+            completedTasks++;
+
+            // Auth error, stop everything
+            if (error && error.isAuthError) {
+                await handleAuthError();
+                concurrencyScheduler.terminate();
+                return;
+            }
+
+            // Save partial result to IDB
+            const {report, schemaId} = task;
             if (!report.extractions) report.extractions = [];
 
-            const developerPrompt = buildDeveloperPrompt(systemPrompt, report.content);
-
-            for (let i = 0; i < schemaFiles.length; i++) {
-                if (extractionTerminated) break;
-
-                const schema = schemaFiles[i];
-                const schemaId = i;
-
-                const existing = report.extractions.find(e => e.schemaId === schemaId);
-                if (existing) {
-                    completed++;
-                    updateExtractionProgress(completed, totalWork);
-                    continue;
-                }
-
-                const userQuery = buildUserQuery(schema);
-                const data = await performLLMExtraction(developerPrompt, userQuery, model);
-
-                report.extractions.push({schemaId, data});
-                await putUploadedFile(report);
-
-                completed++;
-                updateExtractionProgress(completed, totalWork);
+            let existing = report.extractions.find(e => e.schemaId === schemaId);
+            if (!existing) {
+                existing = {schemaId, data: {}};
+                report.extractions.push(existing);
             }
-        }
-
-        const endedAtTime = new Date(Date.now()).toISOString();
-
-        // JSON data
-        const allReports = await getAllUploadedFiles();
-        const combinedData = combineExtractedData(allReports);
-        displayExtractedData(combinedData);
-
-        // JSON-LD document
-        if (appConfig.jsonldContextFiles) {
-            const schemaFileUrls = appConfig.schemaFileUrls || [];
-            const provenance = {
-                startedAtTime,
-                endedAtTime,
-                applicationURL: window.location.href,
-                chatCompletionsEndpoint: creds.baseUrl + '/chat/completions',
-                modelName: model
+            if (!error) {
+                existing.data = result || {};
             }
-            const jsonLdDoc = prepareJsonLdDoc(
-                schemaFileUrls, appConfig.jsonldContextFiles, combinedData, provenance
+            await putUploadedFile(report);
+
+            // Update per-report counters
+            const prevCount = reportTaskCountMap.get(report.id) || 0;
+            const newCount = prevCount + 1;
+            reportTaskCountMap.set(report.id, newCount);
+            if (newCount === schemasPerReport) {
+                completedReports++;
+            }
+
+            // Update progress
+            updateExtractionProgress(
+                completedTasks,
+                completedTasks + (totalTasks - completedTasks),
+                completedReports,
+                totalReports
             );
-            await displayJsonLdDoc(jsonLdDoc);
-        } else {
-            const jsonLdContainer = document.getElementById('standardization');
-            if (jsonLdContainer) {
-                jsonLdContainer.innerHTML = `
-                    <p class="text-lg text-gray-600">
-                        JSON-LD context files are required in the config
-                        to generate a JSON-LD document.
-                    </p>`;
-            }
-        }
+        };
+
+        const onBatchComplete = () => {};
+
+        await concurrencyScheduler.run(tasks, onTaskDone, onBatchComplete);
 
     } finally {
+        await displayExtractedResults(appConfig, startedAtTime);
+
         disableSubmitButton(false);
         updateClearButtonState('Erase extracted data');
         extractionTerminated = false;
