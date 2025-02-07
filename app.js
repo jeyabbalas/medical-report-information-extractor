@@ -1292,6 +1292,21 @@ async function displayExtractedResults(appConfig, startedAtTime) {
 }
 
 
+function showRateLimitEarlyTerminationMessage() {
+    const container = document.getElementById('info-extraction');
+    if (!container) return;
+
+    const messageDiv = document.createElement('div');
+    messageDiv.className =
+      'mt-2 p-3 border border-red-300 bg-red-50 text-red-800 rounded text-sm';
+    messageDiv.textContent =
+      'The run terminated early due to repeated rate limit errors at the chosen API endpoint. ' +
+      'Some extractions may be incomplete.';
+
+    container.appendChild(messageDiv);
+}
+
+
 async function handleSubmitExtraction() {
     const missing = await getMissingInfo();
     if (missing.length > 0) {
@@ -1372,7 +1387,12 @@ async function handleSubmitExtraction() {
         completedTasks = Array.from(reportTaskCountMap.values())
             .reduce((acc, val) => acc + val, 0);
 
-        updateExtractionProgress(completedTasks, totalTasks + completedTasks, completedReports, totalReports);
+        updateExtractionProgress(
+            completedTasks,
+            totalTasks + completedTasks,
+            completedReports,
+            totalReports
+        );
 
         const onTaskDone = async (task, result, error) => {
             completedTasks++;
@@ -1421,6 +1441,10 @@ async function handleSubmitExtraction() {
 
     } finally {
         await displayExtractedResults(appConfig, startedAtTime);
+
+        if (concurrencyScheduler?.rateLimiter?.shouldTerminateEarly) {
+            showRateLimitEarlyTerminationMessage();
+        }
 
         disableSubmitButton(false);
         updateClearButtonState('Erase extracted data');

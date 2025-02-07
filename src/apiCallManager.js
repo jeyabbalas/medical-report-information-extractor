@@ -16,12 +16,16 @@ class AdaptiveRateLimiter {
         this.currentBackoff = this.minBackoffTime;
         this.consecutiveErrors = 0;
         this.lastErrorTime = null;
+
+        // Track consecutive 429 errors
+        this.consecutiveRateLimitErrors = 0;
+        this.shouldTerminateEarly = false;
     }
 
     async enforceRateLimit() {
         const now = Date.now();
         // Clean up timestamps outside the 60-sec window
-        this.requestWindow = this.requestWindow.filter(entry => entry > now - this.windowDuration);
+        this.requestWindow = this.requestWindow.filter(t => t > now - this.windowDuration);
 
         // Rate limit violation
         if (this.requestWindow.length >= this.maxRequestsPerMinute) {
@@ -42,9 +46,8 @@ class AdaptiveRateLimiter {
     }
 
     handleError(error) {
-        const now = Date.now();
         this.consecutiveErrors++;
-        this.lastErrorTime = now;
+        this.lastErrorTime = Date.now();
 
         // Exponential backoff with jitter
         this.currentBackoff = Math.min(
@@ -54,7 +57,20 @@ class AdaptiveRateLimiter {
 
         // If it's a rate limit error, enforce a minimum wait
         if (error.response?.status === 429) {
+            this.consecutiveRateLimitErrors++;
             this.currentBackoff = Math.max(this.currentBackoff, 5000);
+
+            // If we are already at maxBackoffTime and have hit 3 consecutive 429s,
+            // set a flag to indicate early termination
+            if (
+                this.currentBackoff === this.maxBackoffTime &&
+                this.consecutiveRateLimitErrors >= 3
+            ) {
+                this.shouldTerminateEarly = true;
+            }
+        } else {
+            // Reset consecutive 429 count if it's not a 429 error
+            this.consecutiveRateLimitErrors = 0;
         }
 
         return this.currentBackoff;
@@ -65,6 +81,8 @@ class AdaptiveRateLimiter {
         if (this.consecutiveErrors > 0 && Date.now() - this.lastErrorTime > this.windowDuration) {
             this.consecutiveErrors = 0;
             this.currentBackoff = this.minBackoffTime;
+            this.consecutiveRateLimitErrors = 0;
+            this.shouldTerminateEarly = false;
         }
     }
 }
@@ -92,8 +110,8 @@ class DynamicConcurrentScheduler {
         let index = 0;
         while (index < tasks.length && !this.terminated) {
             const batch = tasks.slice(index, index + this.concurrency);
-            await this.runBatch(batch, onTaskDone);
 
+            await this.runBatch(batch, onTaskDone);
             if (this.terminated) break;
 
             index += batch.length;
@@ -111,14 +129,10 @@ class DynamicConcurrentScheduler {
     async runTask(task, onTaskDone) {
         if (this.terminated) return;
 
-        let result;
-        let error = null;
-
+        let result, error = null;
         try {
             // Basic rate-limiting
             await this.rateLimiter.enforceRateLimit();
-
-            // Make the actual call
             result = await this.apiCallFn(task);
 
             // No error => increment success count
@@ -131,13 +145,16 @@ class DynamicConcurrentScheduler {
                 this.concurrency = Math.min(this.concurrency * 2, this.maxConcurrency);
                 this.successfulCallsSinceLastError = 0;
             }
-
             this.rateLimiter.resetErrorCount();
-
         } catch (e) {
             error = e;
             // Error => backoff
             const backoffTime = this.rateLimiter.handleError(e);
+
+            // Terminate early if the rate limiter says so
+            if (this.rateLimiter.shouldTerminateEarly) {
+                this.terminate();
+            }
 
             // Halve concurrency if above 1
             if (this.concurrency > 1) {
