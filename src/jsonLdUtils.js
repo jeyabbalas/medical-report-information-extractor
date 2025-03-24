@@ -53,7 +53,7 @@ async function buildLinkedTable(container, jsonLdDoc) {
     // JSON dataset
     const jsonData = jsonLdDocCopy["@graph"] || [];
     const headers =
-        jsonLdDocCopy["@graph"].length > 1 ? Object.keys(jsonLdDocCopy["@graph"][0]) : [];
+        jsonLdDocCopy["@graph"].length > 0 ? Object.keys(jsonLdDocCopy["@graph"][0]) : [];
 
     // Expand JSON-LD data (integrate @context into the @graph data)
     let expandedDoc;
