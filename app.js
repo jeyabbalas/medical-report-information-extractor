@@ -1111,6 +1111,81 @@ function combineExtractedData(reports) {
 }
 
 
+/**
+ * Convert JSON data to CSV format
+ * @param {Array} data - Array of objects to convert to CSV
+ * @returns {string} CSV formatted string
+ */
+function convertJsonToCsv(data) {
+    if (!data || data.length === 0) return '';
+
+    // Get all unique headers from all objects
+    const headers = Array.from(new Set(data.flatMap(d => Object.keys(d))));
+
+    // Create CSV header row
+    const csvHeader = headers.map(header => `"${header}"`).join(',');
+
+    // Create CSV data rows
+    const csvRows = data.map(row => {
+        return headers.map(header => {
+            const value = row[header];
+            if (value === null || value === undefined) {
+                return '""';
+            } else if (Array.isArray(value) || typeof value === 'object') {
+                // Escape quotes in JSON strings for CSV
+                return `"${JSON.stringify(value).replace(/"/g, '""')}"`;
+            } else {
+                // Escape quotes in regular strings for CSV
+                return `"${String(value).replace(/"/g, '""')}"`;
+            }
+        }).join(',');
+    });
+
+    return [csvHeader, ...csvRows].join('\n');
+}
+
+
+/**
+ * Create download buttons for both JSON and CSV formats
+ * @param {Array} data - The data to be downloaded
+ * @returns {HTMLElement} Container with both download buttons
+ */
+function createDownloadButtons(data) {
+    const btnContainer = document.createElement('div');
+    btnContainer.id = 'downloadBtnContainer';
+    btnContainer.className = 'flex justify-center gap-2 w-full my-2';
+
+    // JSON Download Button
+    const jsonBtn = document.createElement('button');
+    jsonBtn.className = 'inline-flex justify-center rounded-md border border-transparent bg-green-800 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2';
+    jsonBtn.textContent = 'Download JSON';
+    jsonBtn.addEventListener('click', (_) => {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
+        const dlAnchorElem = document.createElement('a');
+        dlAnchorElem.setAttribute("href", dataStr);
+        dlAnchorElem.setAttribute("download", `extracted_information.json`);
+        dlAnchorElem.click();
+    });
+
+    // CSV Download Button
+    const csvBtn = document.createElement('button');
+    csvBtn.className = 'inline-flex justify-center rounded-md border border-transparent bg-green-800 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2';
+    csvBtn.textContent = 'Download CSV';
+    csvBtn.addEventListener('click', (_) => {
+        const csvData = convertJsonToCsv(data);
+        const dataStr = "data:text/csv;charset=utf-8," + encodeURIComponent(csvData);
+        const dlAnchorElem = document.createElement('a');
+        dlAnchorElem.setAttribute("href", dataStr);
+        dlAnchorElem.setAttribute("download", `extracted_information.csv`);
+        dlAnchorElem.click();
+    });
+
+    btnContainer.appendChild(jsonBtn);
+    btnContainer.appendChild(csvBtn);
+    return btnContainer;
+}
+
+
 function createDownloadDataButton(buttonLabel, data, isLinkedData = false) {
     const btnContainer = document.createElement('div');
     btnContainer.id = 'downloadBtnContainer';
@@ -1150,7 +1225,7 @@ function displayExtractedData(data) {
         clearDisplayedExtractedData();
         const headers = Array.from(new Set(data.flatMap(d => Object.keys(d))));
         tableContainer.appendChild(buildPlainTable(data, headers));
-        tableContainer.appendChild(createDownloadDataButton('Download JSON', data));
+        tableContainer.appendChild(createDownloadButtons(data));
     }
 }
 
