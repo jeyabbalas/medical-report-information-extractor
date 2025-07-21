@@ -100,17 +100,6 @@ function ui(divID) {
                 </p>
             </div>
 
-            <!-- WebLLM Loading Progress -->
-            <div id="webllm-loading-container" class="hidden mt-3">
-                <div class="w-full bg-gray-200 h-1 mb-2 overflow-hidden rounded">
-                    <div id="webllm-loading-bar" class="bg-green-500 h-full w-0 transition-all duration-200 ease-in"></div>
-                </div>
-                <p id="webllm-loading-status" class="text-sm text-gray-600"></p>
-            </div>
-
-            <!-- WebLLM Message Container -->
-            <div id="webllm-message-container" class="hidden mt-2"></div>
-
             <p id="remote-api-description" class="mt-1 text-sm leading-6 text-gray-600">Provide the base URL of your LLM API endpoint and the associated API key. The endpoint must be compatible with OpenAI's API structure, requiring the <a target="_blank" class="underline text-green-700 text-sm font-mono" href="https://platform.openai.com/docs/api-reference/models">models</a> and <a target="_blank" class="underline text-green-700 text-sm font-mono" href="https://platform.openai.com/docs/api-reference/chat/create">chat/completions</a> endpoints. For example, to use the OpenAI API, set the base URL to <span class="font-mono px-1 rounded">https://api.openai.com/v1</span> and the API key can be generated at <a target="_blank" class="underline text-green-700 text-sm" href="https://platform.openai.com/api-keys">OpenAI API keys</a>. Optionally, an LLM can be self-hosted via an OpenAI-compatible API using tools like <a target="_blank" class="underline text-green-700 text-sm" href="https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html">vLLM</a>.</p>
             
             <div id="api-credentials-section" class="mt-3 sm:mt-4 -space-y-px rounded-md flex flex-col items-center">
@@ -145,6 +134,17 @@ function ui(divID) {
                         <option value="" disabled selected>Set URL/API key above to see models list</option>
                     </select>
                 </div>
+                
+                <!-- WebLLM Loading Progress (moved here from API config section) -->
+                <div id="webllm-loading-container" class="hidden mt-3 w-full sm:w-3/4 md:w-2/3 lg:w-1/2">
+                    <div class="w-full bg-gray-200 h-1 mb-2 overflow-hidden rounded">
+                        <div id="webllm-loading-bar" class="bg-green-500 h-full w-0 transition-all duration-200 ease-in"></div>
+                    </div>
+                    <p id="webllm-loading-status" class="text-sm text-gray-600"></p>
+                </div>
+
+                <!-- WebLLM Message Container (moved here from API config section) -->
+                <div id="webllm-message-container" class="hidden mt-2 w-full sm:w-3/4 md:w-2/3 lg:w-1/2"></div>
             </div>
         </div>
     </div>

@@ -367,8 +367,10 @@ function generateJsonLdDocForFileName() {
 }
 
 
-function generateJsonLdDocForProvenance(startedAtTime, endedAtTime, applicationURL, chatCompletionsEndpoint, modelName) {
-    return {
+function generateJsonLdDocForProvenance(startedAtTime, endedAtTime, applicationURL, chatCompletionsEndpoint, modelName, webllmInfo = null) {
+    const isInBrowser = chatCompletionsEndpoint === 'in-browser';
+
+    const provenanceDoc = {
         '@context': {
             'prov': 'http://www.w3.org/ns/prov#',
             'xsd': 'http://www.w3.org/2001/XMLSchema#',
@@ -393,14 +395,20 @@ function generateJsonLdDocForProvenance(startedAtTime, endedAtTime, applicationU
             },
             'prov:used': [
                 {
-                    '@id': chatCompletionsEndpoint,
+                    '@id': isInBrowser ? `${applicationURL}#webllm` : chatCompletionsEndpoint,
                     '@type': 'prov:Entity',
-                    'schema:softwareVersion': modelName,
-                    'schema:description': 'A large language model.'
+                    'schema:softwareVersion': isInBrowser
+                        ? `WebLLM v${webllmInfo?.version || 'unknown'} - ${modelName}`
+                        : modelName,
+                    'schema:description': isInBrowser
+                        ? 'In-browser large language model inference using WebLLM.'
+                        : 'A large language model.'
                 }
             ]
         }
-    }
+    };
+
+    return provenanceDoc;
 }
 
 
