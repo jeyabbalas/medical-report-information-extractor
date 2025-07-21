@@ -21,9 +21,8 @@ Based on the provided pathology report and the JSON Schema, return a JSON object
 
 To accomplish this task, follow the steps outlined below:
 
-1. Extract Relevant Information: In your output, create a section titled "RELEVANT INFORMATION:". Under this section, create a subheading for each requested JSON key. Within the subheading for each key, list the following information.
-    - Snippets from the pathology report: Within the subheading for each requested key, identify and extract all relevant snippets from the pathology report that may aid in determining the likely correct value for that key. Note: Do not add any new information or notes of your own. If no relevant information is present in the pathology report, just write: "No relevant information".
-    - JSON Schema constraints: After listing the snippets from the pathology report, list the description and all constraints specified in the JSON Schema for this variable.
+1. Extract Relevant Information: In your output, create a section titled "RELEVANT INFORMATION:". Under this section, identify and extract all relevant snippets from the pathology report that may aid in determining the likely correct value for the requested keys. Note: Do not add any new information or notes of your own. If no relevant information is present in the pathology report, just write: "No relevant information".
+    - JSON Schema constraints: After listing the snippets from the pathology report, list all constraints specified in the JSON Schema for this variable.
 
 2. Return the result JSON:
 	- Using the relevant information you have extracted and addressing all the constraints specified by each variable's JSON Schema, construct a JSON object with the most likely correct values assigned to each requested key.
