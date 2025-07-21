@@ -1,0 +1,30 @@
+{
+  "type": "object",
+  "properties": {
+    "diagnosis": {
+      "description": "Read the pathology report summary and record the **single MOST SEVERE cervical diagnosis explicitly stated by the pathologist**. Use the following hierarchy when multiple lesions are mentioned in the same specimen: 1. Invasive cancers ('SQ' > 'AD'); 2. Glandular in‑situ lesion ('AIS'); 3. High‑grade squamous intraepithelial lesions ('CIN3' > 'CIN2/3' > 'CIN2'); 4. Low‑grade squamous intraepithelial lesion ('CIN1'); 5. Normal/negative findings ('Normal'). **Do NOT infer** a category that is not written; choose based only on words that actually appear. Ignore comments about margins, ECC, endometrial curettage, HPV typing, or immunostains unless the core diagnostic words are present. When a phrase could map to more than one category, pick the **more severe** one (e.g., “HSIL, cannot exclude invasion” → 'SQ'). If the summary says “no residual dysplasia” or “regressed lesion,” treat as the less‑severe category that remains documented (often “Normal”).",
+      "type": "string",
+      "enum": [
+        "Normal",
+        "CIN1",
+        "CIN2",
+        "CIN2/3",
+        "CIN3",
+        "AIS",
+        "SQ",
+        "AD"
+      ],
+      "enumDescriptions": [
+        "Assign 'Normal': For Normal / Negative for intraepithelial lesion or malignancy (NILM). Look for: 'negative', 'benign cervix', 'no dysplasia', 'reactive changes only', 'normal squamous mucosa'. Edge cases: If the summary lists only benign findings such as inflammation, nabothian cysts, or polyp, still choose 'Normal'.",
+        "Assign 'CIN1': For CIN1 / Low‑grade Squamous Intraepithelial Lesion – LSIL. Key words: 'CIN1', 'LSIL', 'mild dysplasia', 'HPV effect', 'koilocytosis'. Edge cases: If the report says 'low‑grade' without a grade number, treat as CIN1.",
+        "Assign 'CIN2': For CIN2 / High‑grade Squamous Intraepithelial Lesion – HSIL. Key words: 'CIN2', 'HSIL, grade2', 'moderate dysplasia'. Edge cases: If only 'HSIL' is written with no grade and no suggestion of grade 3, default to 'CIN2'.",
+        "Assign 'CIN2/3': For CIN2/3 / HSIL – cannot distinguish grade. Key words: 'CIN2‑3', 'CIN2‑3', 'HSIL (cannot exclude CIN3)', 'HSIL, grade 2–3'. Edge cases: Use when the pathologist explicitly states an indeterminate grade between 2 and 3.",
+        "Assign 'CIN3': For CIN3 / Severe HSIL / Carcinoma in situ – CIS). Key words: 'CIN3', 'HSIL, grade3', 'severe dysplasia', 'carcinoma in situ (squamous)', 'CIS'. Edge cases: 'HSIL with features suspicious for early invasion' → if no definite invasion documented, still code 'CIN3'.",
+        "Assign 'AIS': For AIS (Adenocarcinoma in situ). Key words: 'AIS', 'adenocarcinoma in situ', 'endocervical glandular dysplasia (grade 3)', 'glandular CIS'. Edge cases: If both HSIL and AIS are present, choose 'AIS' because glandular in‑situ outranks squamous HSIL in hierarchy.",
+        "Assign 'SQ': For SQ (Invasive Squamous Cell Carcinoma). Key words: 'invasive squamous cell carcinoma', 'microinvasive squamous carcinoma', 'SCC', 'keratinizing squamous carcinoma', 'non‑keratinizing SCC'. Edge cases: The qualifier 'microinvasive' still counts as invasive. If invasion is *suspected* but not confirmed ('suspicious for'), stay in the highest HSIL category (usually 'CIN3').",
+        "Assign 'AD': For AD (Invasive Adenocarcinoma). Key words: 'adenocarcinoma', 'invasive endocervical adenocarcinoma', 'adenosquamous carcinoma' (if predominantly glandular), 'minimal deviation adenocarcinoma (MDA)'. Edge cases: If both invasive squamous and invasive adenocarcinoma are documented, record whichever histology the pathologist labels as primary; if unclear, default to 'AD' because mixed lesions usually follow the glandular component."
+      ]
+    }
+  },
+  "required": ["diagnosis"]
+}
