@@ -78,8 +78,42 @@ function ui(divID) {
 
         <div class="col-span-full">
             <h2 class="text-base sm:text-lg font-semibold leading-7 text-gray-900">LLM API configuration</h2>
-            <p class="mt-1 text-sm leading-6 text-gray-600">Provide the base URL of your LLM API endpoint and the associated API key. The endpoint must be compatible with OpenAI's API structure, requiring the <a target="_blank" class="underline text-green-700 text-sm font-mono" href="https://platform.openai.com/docs/api-reference/models">models</a> and <a target="_blank" class="underline text-green-700 text-sm font-mono" href="https://platform.openai.com/docs/api-reference/chat/create">chat/completions</a> endpoints. For example, to use the OpenAI API, set the base URL to <span class="font-mono px-1 rounded">https://api.openai.com/v1</span> and the API key can be generated at <a target="_blank" class="underline text-green-700 text-sm" href="https://platform.openai.com/api-keys">OpenAI API keys</a>. Optionally, an LLM can be self-hosted via an OpenAI-compatible API using tools like <a target="_blank" class="underline text-green-700 text-sm" href="https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html">vLLM</a>.</p>
-            <div class="mt-3 sm:mt-4 -space-y-px rounded-md flex flex-col items-center">
+            
+            <!-- LLM Mode Toggle -->
+            <div class="mt-3 sm:mt-4">
+                <label class="text-sm font-medium text-gray-900">LLM Mode</label>
+                <div class="mt-2 space-x-4">
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="llm-mode" value="remote" checked class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300">
+                        <span class="ml-2 text-sm text-gray-700">Remote API</span>
+                    </label>
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="llm-mode" value="in-browser" class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300">
+                        <span class="ml-2 text-sm text-gray-700">In-browser (Privacy-preserving)</span>
+                    </label>
+                </div>
+                <p id="privacy-message" class="hidden mt-2 text-sm text-green-600">
+                    <svg class="inline w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                    </svg>
+                    Your data stays in your browser. No information is sent to external servers.
+                </p>
+            </div>
+
+            <!-- WebLLM Loading Progress -->
+            <div id="webllm-loading-container" class="hidden mt-3">
+                <div class="w-full bg-gray-200 h-1 mb-2 overflow-hidden rounded">
+                    <div id="webllm-loading-bar" class="bg-green-500 h-full w-0 transition-all duration-200 ease-in"></div>
+                </div>
+                <p id="webllm-loading-status" class="text-sm text-gray-600"></p>
+            </div>
+
+            <!-- WebLLM Message Container -->
+            <div id="webllm-message-container" class="hidden mt-2"></div>
+
+            <p id="remote-api-description" class="mt-1 text-sm leading-6 text-gray-600">Provide the base URL of your LLM API endpoint and the associated API key. The endpoint must be compatible with OpenAI's API structure, requiring the <a target="_blank" class="underline text-green-700 text-sm font-mono" href="https://platform.openai.com/docs/api-reference/models">models</a> and <a target="_blank" class="underline text-green-700 text-sm font-mono" href="https://platform.openai.com/docs/api-reference/chat/create">chat/completions</a> endpoints. For example, to use the OpenAI API, set the base URL to <span class="font-mono px-1 rounded">https://api.openai.com/v1</span> and the API key can be generated at <a target="_blank" class="underline text-green-700 text-sm" href="https://platform.openai.com/api-keys">OpenAI API keys</a>. Optionally, an LLM can be self-hosted via an OpenAI-compatible API using tools like <a target="_blank" class="underline text-green-700 text-sm" href="https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html">vLLM</a>.</p>
+            
+            <div id="api-credentials-section" class="mt-3 sm:mt-4 -space-y-px rounded-md flex flex-col items-center">
                 <div class="relative rounded-md rounded-b-none px-3 pb-1.5 pt-2.5 w-full sm:w-3/4 md:w-2/3 lg:w-1/2 ring-1 ring-inset ring-gray-300 focus-within:z-10 focus-within:ring-2 focus-within:ring-green-600">
                     <label for="llm-base-url" class="block text-xs font-medium text-gray-900">Base URL</label>
                     <input type="url" name="llm-base-url" id="llm-base-url" class="block w-full border-0 p-0 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-0 text-sm sm:text-base sm:leading-6" placeholder="http://localhost:8000/v1" value="${llmBaseUrlDefault}" required>
