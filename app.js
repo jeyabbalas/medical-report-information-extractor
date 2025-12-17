@@ -19,14 +19,9 @@ import {
 import {DynamicConcurrentScheduler} from './src/apiCallManager.js';
 
 import {OpenAI} from 'https://cdn.skypack.dev/openai@4.78.1?min';
-import * as webllm from 'https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.79/+esm';
 
 
 let openaiClient = null;
-let webllmEngine = null;
-let currentLLMMode = 'remote';
-let isWebLLMLoading = false;
-const WEBLLM_VERSION = '0.2.79';
 let extractionTerminated = false;
 let concurrencyScheduler = null;
 
@@ -395,13 +390,7 @@ async function handleModelSelectionChange() {
     const newModel = selectEl.value;
 
     try {
-        if (currentLLMMode === 'in-browser') {
-            // Load the WebLLM model
-            await loadWebLLMModel(newModel);
-        } else {
-            // Save OpenAI model selection
-            await storeSelectedModelInIdb(newModel);
-        }
+        await storeSelectedModelInIdb(newModel);
     } catch (err) {
         console.error('Error handling model selection:', err);
     }
@@ -506,363 +495,6 @@ function clearModelsDropdown() {
     const selectEl = document.getElementById('llm-model');
     if (!selectEl) return;
     selectEl.innerHTML = `<option value="" disabled selected>Set URL/API key above to see models list</option>`;
-}
-
-
-/* -------------------------------------------------------------
- * WEBLLM FUNCTIONS
- * -------------------------------------------------------------
- */
-
-function setWebLLMMessage(message, isSuccess = false) {
-    const container = document.getElementById('webllm-message-container');
-    if (!container) return;
-
-    container.className = 'relative p-3 text-sm rounded-lg border my-2';
-
-    if (isSuccess) {
-        container.classList.add('bg-green-50', 'text-green-800', 'border-green-300');
-    } else {
-        container.classList.add('bg-red-50', 'text-red-800', 'border-red-300');
-    }
-    container.textContent = message;
-    container.classList.remove('hidden');
-}
-
-
-function clearWebLLMMessage() {
-    const container = document.getElementById('webllm-message-container');
-    if (!container) return;
-    container.textContent = '';
-    container.className = 'hidden';
-}
-
-
-function showWebLLMLoadingBar(show) {
-    const container = document.getElementById('webllm-loading-container');
-    if (!container) return;
-    if (show) {
-        container.classList.remove('hidden');
-    } else {
-        container.classList.add('hidden');
-        const bar = document.getElementById('webllm-loading-bar');
-        if (bar) bar.style.width = '0%';
-    }
-}
-
-
-function updateWebLLMLoadingBar(percent, status = '') {
-    const bar = document.getElementById('webllm-loading-bar');
-    const statusEl = document.getElementById('webllm-loading-status');
-    if (bar) {
-        bar.style.width = `${percent}%`;
-    }
-    if (statusEl && status) {
-        statusEl.textContent = status;
-    }
-}
-
-
-async function setLLMMode(mode) {
-    currentLLMMode = mode;
-
-    const baseUrlField = document.getElementById('llm-base-url');
-    const apiKeyField = document.getElementById('llm-api-key');
-    const privacyMessage = document.getElementById('privacy-message');
-    const remoteApiDesc = document.getElementById('remote-api-description');
-    const apiCredSection = document.getElementById('api-credentials-section');
-    const submitButtons = document.getElementById('submit-api-key-buttons');
-
-    if (mode === 'in-browser') {
-        // Disable remote API fields
-        if (baseUrlField) baseUrlField.disabled = true;
-        if (apiKeyField) apiKeyField.disabled = true;
-        if (apiCredSection) apiCredSection.style.opacity = '0.5';
-        if (submitButtons) submitButtons.style.display = 'none';
-
-        // Show privacy message
-        if (privacyMessage) privacyMessage.classList.remove('hidden');
-        if (remoteApiDesc) remoteApiDesc.classList.add('hidden');
-
-        // Clear API key message
-        clearApiKeyMessage();
-
-        // Populate WebLLM models
-        await populateWebLLMModelsDropdown();
-
-        // Load saved WebLLM model if exists, otherwise load default
-        const savedWebLLMModel = await getConfigRecord('webllmModel');
-        const defaultModel = 'Llama-3.2-1B-Instruct-q0f16-MLC';
-
-        if (savedWebLLMModel && savedWebLLMModel.name) {
-            // Load the saved model
-            await loadWebLLMModel(savedWebLLMModel.name);
-        } else {
-            // No saved model, load the default
-            const selectEl = document.getElementById('llm-model');
-            if (selectEl) {
-                // Check if default model exists in the dropdown
-                const modelExists = Array.from(selectEl.options).some(opt => opt.value === defaultModel);
-                if (modelExists) {
-                    selectEl.value = defaultModel;
-                    await loadWebLLMModel(defaultModel);
-                } else if (selectEl.options.length > 0) {
-                    // Default not found, load first available model
-                    const firstModel = selectEl.options[0].value;
-                    selectEl.value = firstModel;
-                    await loadWebLLMModel(firstModel);
-                }
-            }
-        }
-    } else {
-        // Enable remote API fields
-        if (baseUrlField) baseUrlField.disabled = false;
-        if (apiKeyField) apiKeyField.disabled = false;
-        if (apiCredSection) apiCredSection.style.opacity = '1';
-        if (submitButtons) submitButtons.style.display = 'block';
-
-        // Hide privacy message
-        if (privacyMessage) privacyMessage.classList.add('hidden');
-        if (remoteApiDesc) remoteApiDesc.classList.remove('hidden');
-
-        // Clear WebLLM message
-        clearWebLLMMessage();
-
-        // Re-populate OpenAI models if credentials exist
-        if (openaiClient) {
-            await populateModelsDropdown();
-        } else {
-            clearModelsDropdown();
-        }
-    }
-
-    // Save mode to IndexedDB
-    await saveConfigRecord({
-        id: 'llmMode',
-        mode: mode
-    });
-}
-
-
-async function loadWebLLMModel(modelId) {
-    if (isWebLLMLoading) return;
-
-    isWebLLMLoading = true;
-    clearWebLLMMessage();
-    showWebLLMLoadingBar(true);
-
-    try {
-        const initProgressCallback = (initProgress) => {
-            const percent = Math.round(initProgress.progress * 100);
-            let status = initProgress.text || '';
-
-            // Make status more user-friendly
-            if (status.includes('Loading model')) {
-                status = 'Loading model files...';
-            } else if (status.includes('Downloading')) {
-                status = 'Downloading model (this may take a few minutes on first load)...';
-            } else if (status.includes('Initializing')) {
-                status = 'Initializing model...';
-            }
-
-            updateWebLLMLoadingBar(percent, status);
-        };
-
-        // Create or reload engine
-        webllmEngine = await webllm.CreateMLCEngine(
-            modelId,
-            {
-                initProgressCallback: initProgressCallback,
-                logLevel: 'INFO'
-            }
-        );
-
-        // Save successful model load
-        await saveConfigRecord({
-            id: 'webllmModel',
-            name: modelId,
-            loaded: true
-        });
-
-        showWebLLMLoadingBar(false);
-        setWebLLMMessage('✓ Model loaded successfully and ready for use!', true);
-
-    } catch (error) {
-        console.error('Error loading WebLLM model:', error);
-        showWebLLMLoadingBar(false);
-        setWebLLMMessage(`Failed to load model: ${error.message}`, false);
-        webllmEngine = null;
-    } finally {
-        isWebLLMLoading = false;
-    }
-}
-
-
-async function populateWebLLMModelsDropdown() {
-    const selectEl = document.getElementById('llm-model');
-    if (!selectEl) return;
-
-    selectEl.innerHTML = '';
-
-    try {
-        // Get available models from WebLLM
-        const models = await webllm.prebuiltAppConfig.model_list;
-
-        // Filter for instruction models and smaller sizes
-        const instructModels = models.filter(m =>
-            m.model_id.includes('Instruct') ||
-            m.model_id.includes('instruct') ||
-            m.model_id.includes('chat')
-        );
-
-        if (!instructModels.length) {
-            selectEl.innerHTML = `<option disabled selected>No models available</option>`;
-            return;
-        }
-
-        // Group by model family for better organization
-        const storedModel = await getConfigRecord('webllmModel');
-
-        for (const model of instructModels) {
-            const opt = document.createElement('option');
-            opt.value = model.model_id;
-            opt.textContent = model.model_id;
-            selectEl.appendChild(opt);
-        }
-
-        // Set default or saved model
-        let modelToSelect = 'Llama-3.2-1B-Instruct-q0f16-MLC';
-        if (storedModel && storedModel.name) {
-            modelToSelect = storedModel.name;
-        }
-
-        // Check if model exists in list
-        const modelExists = Array.from(selectEl.options).some(opt => opt.value === modelToSelect);
-        if (modelExists) {
-            selectEl.value = modelToSelect;
-        } else if (instructModels.length > 0) {
-            selectEl.value = instructModels[0].model_id;
-        }
-
-    } catch (error) {
-        console.error('Error populating WebLLM models:', error);
-        selectEl.innerHTML = `<option disabled selected>Could not load models</option>`;
-    }
-}
-
-
-async function performWebLLMExtraction(systemPrompt, userQuery, model) {
-    if (!webllmEngine) {
-        throw new Error('WebLLM engine not initialized');
-    }
-
-    const regex = /```json\s*([\s\S]*?)\s*```/;
-    let attempt = 0;
-
-    while (attempt < 3 && !extractionTerminated) {
-        try {
-            const messages = [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: userQuery }
-            ];
-
-            const response = await webllmEngine.chat.completions.create({
-                messages: messages,
-                temperature: 0.0,
-                max_tokens: 2048,
-                seed: 1234 + attempt  // Increment seed for each attempt
-            });
-
-            const message = response.choices?.[0]?.message?.content || '';
-            const match = message.match(regex);
-
-            if (match) {
-                try {
-                    const parsed = JSON.parse(match[1]);
-                    return parsed;  // Success! Return the parsed JSON
-                } catch (err) {
-                    console.warn(`Attempt ${attempt + 1}: Failed to parse JSON from WebLLM output:`, err);
-                    // Continue to next attempt
-                }
-            } else {
-                console.warn(`Attempt ${attempt + 1}: No JSON found in WebLLM response`);
-            }
-
-        } catch (error) {
-            console.error(`Attempt ${attempt + 1}: WebLLM extraction error:`, error);
-            // If it's the last attempt, throw the error
-            if (attempt === 2) {
-                throw error;
-            }
-        }
-
-        attempt++;
-    }
-
-    // If we've exhausted all attempts, return empty object
-    console.warn('All attempts failed to extract valid JSON from WebLLM');
-    return {};
-}
-
-
-async function runWebLLMExtraction(reports, schemas, systemPrompt, model) {
-    let completedTasks = 0;
-    const totalTasks = reports.length * schemas.length;
-
-    for (let i = 0; i < reports.length; i++) {
-        const report = reports[i];
-
-        for (let j = 0; j < schemas.length; j++) {
-            const schema = schemas[j];
-
-            if (extractionTerminated) return;
-
-            // Check if already extracted
-            let hasExtraction = false;
-            if (report.extractions && Array.isArray(report.extractions)) {
-                const existing = report.extractions.find(e => e.schemaId === j);
-                if (existing && existing.data && Object.keys(existing.data).length > 0) {
-                    hasExtraction = true;
-                }
-            }
-
-            if (!hasExtraction) {
-                try {
-                    const developerPrompt = buildDeveloperPrompt(systemPrompt, report.content);
-                    const userQuery = buildUserQuery(schema);
-
-                    const result = await performWebLLMExtraction(
-                        developerPrompt,
-                        userQuery,
-                        model
-                    );
-
-                    // Save result
-                    if (!report.extractions) report.extractions = [];
-
-                    let existing = report.extractions.find(e => e.schemaId === j);
-                    if (!existing) {
-                        existing = { schemaId: j, data: {} };
-                        report.extractions.push(existing);
-                    }
-                    existing.data = result || {};
-
-                    await putUploadedFile(report);
-
-                } catch (error) {
-                    console.error(`Error extracting from report ${report.name}:`, error);
-                }
-            }
-
-            completedTasks++;
-            updateExtractionProgress(
-                completedTasks,
-                totalTasks,
-                i + 1,
-                reports.length
-            );
-        }
-    }
 }
 
 
@@ -1225,27 +857,16 @@ async function getMissingInfo() {
         }
     }
 
-    // Check mode-specific requirements
-    if (currentLLMMode === 'in-browser') {
-        // For in-browser mode, check WebLLM model
-        const webllmModel = await getConfigRecord('webllmModel');
-        if (!webllmModel || !webllmModel.name) {
-            missing.push('WebLLM model selection');
-        } else if (!webllmEngine) {
-            missing.push('WebLLM model not loaded (please wait for model to finish loading)');
-        }
-    } else {
-        // For remote mode, check API credentials
-        const creds = await getConfigRecord('llmApiCreds');
-        if (!creds || !creds.baseUrl || !creds.apiKey) {
-            missing.push('LLM API base URL and/or API key');
-        }
+    // Remote API credentials (always required)
+    const creds = await getConfigRecord('llmApiCreds');
+    if (!creds || !creds.baseUrl || !creds.apiKey) {
+        missing.push('LLM API base URL and/or API key');
+    }
 
-        // Model
-        const modelRec = await getConfigRecord('model');
-        if (!modelRec || !modelRec.name) {
-            missing.push('LLM model selection');
-        }
+    // Model selection
+    const modelRec = await getConfigRecord('model');
+    if (!modelRec || !modelRec.name) {
+        missing.push('LLM model selection');
     }
 
     // Uploaded files
@@ -1610,13 +1231,13 @@ function displayExtractedData(data) {
 }
 
 
-function prepareJsonLdDoc(schemaFileUrls, jsonLdContextFiles, tabularData, provenance = {}, webllmInfo = null) {
+function prepareJsonLdDoc(schemaFileUrls, jsonLdContextFiles, tabularData, provenance = {}) {
     const jsonLdContextFilesCopy = jsonLdContextFiles.slice();
     jsonLdContextFilesCopy.push(generateJsonLdDocForFileName());
     const provenanceDoc = generateJsonLdDocForProvenance(
         provenance.startedAtTime, provenance.endedAtTime,
         provenance.applicationURL, provenance.chatCompletionsEndpoint,
-        provenance.modelName, webllmInfo);
+        provenance.modelName);
     return buildTabularJsonLdDoc(schemaFileUrls, jsonLdContextFilesCopy, tabularData, provenanceDoc);
 }
 
@@ -1725,15 +1346,8 @@ async function displayExtractedResults(appConfig, startedAtTime, creds = null, m
 
     // JSON-LD
     if (appConfig?.jsonldContextFiles) {
-        // If creds/modelRec not passed, try to get them
         if (!creds) creds = await getConfigRecord('llmApiCreds');
-        if (!modelRec) {
-            if (currentLLMMode === 'in-browser') {
-                modelRec = await getConfigRecord('webllmModel');
-            } else {
-                modelRec = await getConfigRecord('model');
-            }
-        }
+        if (!modelRec) modelRec = await getConfigRecord('model');
 
         if (creds && modelRec) {
             const endedAtTime = new Date().toISOString();
@@ -1741,23 +1355,15 @@ async function displayExtractedResults(appConfig, startedAtTime, creds = null, m
                 startedAtTime,
                 endedAtTime,
                 applicationURL: window.location.href,
-                chatCompletionsEndpoint: currentLLMMode === 'in-browser'
-                    ? 'in-browser'
-                    : creds.baseUrl + '/chat/completions',
+                chatCompletionsEndpoint: creds.baseUrl + '/chat/completions',
                 modelName: modelRec.name
             };
-
-            // Pass WebLLM info if using in-browser mode
-            const webllmInfo = currentLLMMode === 'in-browser'
-                ? { version: WEBLLM_VERSION }
-                : null;
 
             const jsonLdDoc = prepareJsonLdDoc(
                 appConfig.schemaFileUrls || [],
                 appConfig.jsonldContextFiles,
                 combinedData,
-                provenance,
-                webllmInfo
+                provenance
             );
             await displayJsonLdDoc(jsonLdDoc);
         }
@@ -1800,140 +1406,108 @@ async function handleSubmitExtraction() {
 
     try {
         appConfig = await getConfigRecord('appConfig');
+        creds = await getConfigRecord('llmApiCreds');
+        modelRec = await getConfigRecord('model');
         reports = await getAllUploadedFiles();
 
-        if (currentLLMMode === 'in-browser') {
-            // WebLLM extraction
-            if (!webllmEngine) {
-                setWebLLMMessage('Please load a model first', false);
-                return;
-            }
+        if (!appConfig || !creds || !modelRec) {
+            console.error('Missing configuration or credentials; aborting.');
+            return;
+        }
 
-            const webllmModel = await getConfigRecord('webllmModel');
-            if (!webllmModel || !webllmModel.name) {
-                setWebLLMMessage('No model selected', false);
-                return;
-            }
+        const totalReports = reports.length;
+        const schemasPerReport = appConfig.schemaFiles.length;
 
-            await runWebLLMExtraction(
-                reports,
-                appConfig.schemaFiles,
-                appConfig.systemPrompt,
-                webllmModel.name
-            );
+        const tasks = await buildExtractionTasks(
+            reports,
+            appConfig.schemaFiles,
+            appConfig.systemPrompt,
+            modelRec.name
+        );
+        const totalTasks = tasks.length;
 
-            // Create pseudo records for provenance
-            creds = {
-                baseUrl: 'in-browser',
-                apiKey: 'N/A'
-            };
-            modelRec = webllmModel;
+        if (totalTasks === 0) {
+            console.log('All schemas for all reports are already extracted. Displaying results...');
+            await displayExtractedResults(appConfig, startedAtTime);
+            return;
+        }
 
-        } else {
-            // Original remote API logic
-            creds = await getConfigRecord('llmApiCreds');
-            modelRec = await getConfigRecord('model');
-            if (!appConfig || !creds || !modelRec) {
-                console.error('Missing configuration or credentials; aborting.');
-                return;
-            }
+        concurrencyScheduler = new DynamicConcurrentScheduler({
+            initialConcurrency: 1,
+            maxConcurrency: 50,
+            apiCallFn: callOpenAiForExtraction
+        });
 
-            // ... (keep existing remote API extraction logic)
-            const totalReports = reports.length;
-            const schemasPerReport = appConfig.schemaFiles.length;
+        const reportTaskCountMap = new Map();
+        let completedTasks = 0;
+        let completedReports = 0;
 
-            const tasks = await buildExtractionTasks(
-                reports,
-                appConfig.schemaFiles,
-                appConfig.systemPrompt,
-                modelRec.name
-            );
-            const totalTasks = tasks.length;
-
-            if (totalTasks === 0) {
-                console.log('All schemas for all reports are already extracted. Displaying results...');
-                await displayExtractedResults(appConfig, startedAtTime);
-                return;
-            }
-
-            concurrencyScheduler = new DynamicConcurrentScheduler({
-                initialConcurrency: 1,
-                maxConcurrency: 50,
-                apiCallFn: callOpenAiForExtraction
-            });
-
-            // ... (keep rest of existing remote API logic)
-            const reportTaskCountMap = new Map();
-            let completedTasks = 0;
-            let completedReports = 0;
-
-            for (const report of reports) {
-                let extractedCount = 0;
-                if (report.extractions && Array.isArray(report.extractions)) {
-                    for (const e of report.extractions) {
-                        const hasSomeKeys = e.data && Object.keys(e.data).length > 0;
-                        if (hasSomeKeys) {
-                            extractedCount++;
-                        }
+        for (const report of reports) {
+            let extractedCount = 0;
+            if (report.extractions && Array.isArray(report.extractions)) {
+                for (const e of report.extractions) {
+                    const hasSomeKeys = e.data && Object.keys(e.data).length > 0;
+                    if (hasSomeKeys) {
+                        extractedCount++;
                     }
                 }
-                reportTaskCountMap.set(report.id, extractedCount);
-                if (extractedCount === schemasPerReport) {
-                    completedReports++;
-                }
+            }
+            reportTaskCountMap.set(report.id, extractedCount);
+            if (extractedCount === schemasPerReport) {
+                completedReports++;
+            }
+        }
+
+        completedTasks = Array.from(reportTaskCountMap.values())
+            .reduce((acc, val) => acc + val, 0);
+
+        updateExtractionProgress(
+            completedTasks,
+            totalTasks + completedTasks,
+            completedReports,
+            totalReports
+        );
+
+        const onTaskDone = async (task, result, error) => {
+            completedTasks++;
+
+            if (error && error.isAuthError) {
+                await handleAuthError();
+                concurrencyScheduler.terminate();
+                return;
             }
 
-            completedTasks = Array.from(reportTaskCountMap.values())
-                .reduce((acc, val) => acc + val, 0);
+            const {report, schemaId} = task;
+            if (!report.extractions) report.extractions = [];
+
+            let existing = report.extractions.find(e => e.schemaId === schemaId);
+            if (!existing) {
+                existing = {schemaId, data: {}};
+                report.extractions.push(existing);
+            }
+            if (!error) {
+                existing.data = result || {};
+            }
+            await putUploadedFile(report);
+
+            const prevCount = reportTaskCountMap.get(report.id) || 0;
+            const newCount = prevCount + 1;
+            reportTaskCountMap.set(report.id, newCount);
+            if (newCount === schemasPerReport) {
+                completedReports++;
+            }
 
             updateExtractionProgress(
                 completedTasks,
-                totalTasks + completedTasks,
+                completedTasks + (totalTasks - completedTasks),
                 completedReports,
                 totalReports
             );
+        };
 
-            const onTaskDone = async (task, result, error) => {
-                completedTasks++;
+        const onBatchComplete = () => {};
 
-                if (error && error.isAuthError) {
-                    await handleAuthError();
-                    concurrencyScheduler.terminate();
-                    return;
-                }
-
-                const {report, schemaId} = task;
-                if (!report.extractions) report.extractions = [];
-
-                let existing = report.extractions.find(e => e.schemaId === schemaId);
-                if (!existing) {
-                    existing = {schemaId, data: {}};
-                    report.extractions.push(existing);
-                }
-                if (!error) {
-                    existing.data = result || {};
-                }
-                await putUploadedFile(report);
-
-                const prevCount = reportTaskCountMap.get(report.id) || 0;
-                const newCount = prevCount + 1;
-                reportTaskCountMap.set(report.id, newCount);
-                if (newCount === schemasPerReport) {
-                    completedReports++;
-                }
-
-                updateExtractionProgress(
-                    completedTasks,
-                    completedTasks + (totalTasks - completedTasks),
-                    completedReports,
-                    totalReports
-                );
-            };
-
-            const onBatchComplete = () => {};
-
-            await concurrencyScheduler.run(tasks, onTaskDone, onBatchComplete);
-        }
+        await concurrencyScheduler.run(tasks, onTaskDone, onBatchComplete);
 
     } finally {
         await displayExtractedResults(appConfig, startedAtTime, creds, modelRec);
@@ -2000,29 +1574,26 @@ function showEraseDataConfirmationModal() {
  * -------------------------------------------------------------
  */
 
+/**
+ * Cleans up deprecated WebLLM-related records from IndexedDB
+ */
+async function cleanupWebLLMRecords() {
+    try {
+        await deleteConfigRecord('webllmModel');
+        await deleteConfigRecord('llmMode');
+    } catch (err) {
+        console.warn('Error cleaning up WebLLM records:', err);
+    }
+}
+
+
 async function init() {
     ui('app');
 
-    // Initialize LLM mode
-    const savedMode = await getConfigRecord('llmMode');
-    currentLLMMode = savedMode ? savedMode.mode : 'remote';
+    // Clean up deprecated WebLLM records
+    await cleanupWebLLMRecords();
 
-    // Set radio buttons
-    const modeRadios = document.querySelectorAll('input[name="llm-mode"]');
-    modeRadios.forEach(radio => {
-        radio.checked = radio.value === currentLLMMode;
-        radio.addEventListener('change', (e) => {
-            setLLMMode(e.target.value);
-        });
-    });
-
-    // Initialize based on mode
-    if (currentLLMMode === 'in-browser') {
-        await setLLMMode('in-browser');
-    } else {
-        await initOpenAiCredentials();
-    }
-
+    // Initialize API credentials
     await initOpenAiCredentials();
 
     // Model dropdown selection

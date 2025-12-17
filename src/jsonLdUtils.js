@@ -367,9 +367,7 @@ function generateJsonLdDocForFileName() {
 }
 
 
-function generateJsonLdDocForProvenance(startedAtTime, endedAtTime, applicationURL, chatCompletionsEndpoint, modelName, webllmInfo = null) {
-    const isInBrowser = chatCompletionsEndpoint === 'in-browser';
-
+function generateJsonLdDocForProvenance(startedAtTime, endedAtTime, applicationURL, chatCompletionsEndpoint, modelName) {
     const provenanceDoc = {
         '@context': {
             'prov': 'http://www.w3.org/ns/prov#',
@@ -391,18 +389,14 @@ function generateJsonLdDocForProvenance(startedAtTime, endedAtTime, applicationU
                 '@id': applicationURL,
                 '@type': 'prov:SoftwareAgent',
                 'prov:label': 'Medical Report Information Extractor',
-                'schema:description': 'A Web application that leverages large language models to extract structured information from from free-text reports.'
+                'schema:description': 'A Web application that leverages large language models to extract structured information from free-text reports.'
             },
             'prov:used': [
                 {
-                    '@id': isInBrowser ? `${applicationURL}#webllm` : chatCompletionsEndpoint,
+                    '@id': chatCompletionsEndpoint,
                     '@type': 'prov:Entity',
-                    'schema:softwareVersion': isInBrowser
-                        ? `WebLLM v${webllmInfo?.version || 'unknown'} - ${modelName}`
-                        : modelName,
-                    'schema:description': isInBrowser
-                        ? 'In-browser large language model inference using WebLLM.'
-                        : 'A large language model.'
+                    'schema:softwareVersion': modelName,
+                    'schema:description': 'A large language model.'
                 }
             ]
         }
