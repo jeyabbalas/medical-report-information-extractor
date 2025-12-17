@@ -19,11 +19,47 @@ import {
 import {DynamicConcurrentScheduler} from './src/apiCallManager.js';
 
 import {OpenAI} from 'https://cdn.skypack.dev/openai@4.78.1?min';
+import {GoogleGenAI} from 'https://cdn.jsdelivr.net/npm/@google/genai@1.0.0/+esm';
 
 
 let openaiClient = null;
+let geminiClient = null;
 let extractionTerminated = false;
 let concurrencyScheduler = null;
+
+// API provider constants and tracking
+const API_PROVIDERS = {
+    OPENAI: 'openai',
+    GEMINI: 'gemini'
+};
+let currentApiProvider = null;
+let selectedProvider = API_PROVIDERS.OPENAI;  // Currently selected tab
+
+
+function initProviderTabs() {
+    const tabs = document.querySelectorAll('.provider-tab');
+    const panels = document.querySelectorAll('.provider-panel');
+
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const provider = tab.dataset.provider;
+            selectedProvider = provider === 'gemini' ? API_PROVIDERS.GEMINI : API_PROVIDERS.OPENAI;
+
+            // Update tab styling
+            tabs.forEach(t => {
+                t.classList.remove('border-green-600', 'text-green-600');
+                t.classList.add('border-transparent', 'text-gray-500');
+            });
+            tab.classList.remove('border-transparent', 'text-gray-500');
+            tab.classList.add('border-green-600', 'text-green-600');
+
+            // Show/hide panels
+            panels.forEach(panel => panel.classList.add('hidden'));
+            document.getElementById(`provider-${provider}`).classList.remove('hidden');
+        });
+    });
+}
+
 
 const exampleReportUrls = [
     "https://raw.githubusercontent.com/jeyabbalas/medical-report-information-extractor/refs/heads/main/examples/bcn_generations_pathology_data/sample_reports/01.txt",
@@ -319,13 +355,38 @@ async function validateOpenAiApiKey(baseUrl, apiKey) {
 }
 
 
+async function validateGeminiApiKey(apiKey) {
+    if (!apiKey) return false;
+    try {
+        const tempClient = new GoogleGenAI({apiKey});
+        const pager = await tempClient.models.list();
+        // Check if we can iterate the models
+        for await (const model of pager) {
+            return true; // If we get at least one model, key is valid
+        }
+        return true; // Empty list is still valid
+    } catch (error) {
+        console.error('Gemini API key validation failed:', error);
+        return false;
+    }
+}
+
+
 async function createGlobalOpenAiClient(baseUrl, apiKey) {
     openaiClient = new OpenAI({
         baseURL: baseUrl,
         apiKey: apiKey,
         dangerouslyAllowBrowser: true
     });
+    currentApiProvider = API_PROVIDERS.OPENAI;
     await populateModelsDropdown();
+}
+
+
+async function createGlobalGeminiClient(apiKey) {
+    geminiClient = new GoogleGenAI({apiKey});
+    currentApiProvider = API_PROVIDERS.GEMINI;
+    await populateGeminiModelsDropdown();
 }
 
 
@@ -375,6 +436,92 @@ async function populateModelsDropdown() {
 }
 
 
+async function populateGeminiModelsDropdown() {
+    const selectEl = document.getElementById('llm-model');
+    if (!selectEl || !geminiClient) return;
+
+    selectEl.innerHTML = '';
+
+    try {
+        const pager = await geminiClient.models.list();
+        const textModels = [];
+
+        for await (const model of pager) {
+            const name = model.name || '';
+            // Include all gemini models, exclude only embeddings
+            if (name.includes('gemini') && !name.includes('embedding')) {
+                textModels.push({
+                    id: name.replace('models/', ''),
+                    displayName: model.displayName || name.replace('models/', '')
+                });
+            }
+        }
+
+        // Fallback: if no gemini models found, show all non-embedding models
+        if (!textModels.length) {
+            const pager2 = await geminiClient.models.list();
+            for await (const model of pager2) {
+                const name = model.name || '';
+                if (!name.includes('embedding')) {
+                    textModels.push({
+                        id: name.replace('models/', ''),
+                        displayName: model.displayName || name.replace('models/', '')
+                    });
+                }
+            }
+        }
+
+        if (!textModels.length) {
+            selectEl.innerHTML = `<option disabled selected>No models found</option>`;
+            return;
+        }
+
+        // Sort by name descending (newer versions first)
+        textModels.sort((a, b) => b.id.localeCompare(a.id));
+
+        const storedModel = await getConfigRecord('model');
+
+        for (const model of textModels) {
+            const opt = document.createElement('option');
+            opt.value = model.id;
+            opt.textContent = model.displayName;
+            selectEl.appendChild(opt);
+        }
+
+        // Select preferred model (default: gemini-flash-lite-latest)
+        let modelToSelect;
+        if (storedModel?.name) {
+            const exists = Array.from(selectEl.options).some(opt => opt.value === storedModel.name);
+            if (exists) modelToSelect = storedModel.name;
+        }
+
+        if (!modelToSelect) {
+            const preferredModels = ['gemini-flash-lite-latest', 'gemini-flash-latest', 'gemini-pro-latest'];
+            for (const preferred of preferredModels) {
+                const found = Array.from(selectEl.options).find(opt => opt.value.includes(preferred));
+                if (found) {
+                    modelToSelect = found.value;
+                    break;
+                }
+            }
+        }
+
+        if (!modelToSelect && selectEl.options.length > 0) {
+            modelToSelect = selectEl.options[0].value;
+        }
+
+        if (modelToSelect) {
+            selectEl.value = modelToSelect;
+            await storeSelectedModelInIdb(modelToSelect);
+        }
+
+    } catch (error) {
+        console.error('Error populating Gemini models dropdown:', error);
+        selectEl.innerHTML = `<option disabled selected>Could not load models</option>`;
+    }
+}
+
+
 async function storeSelectedModelInIdb(modelName) {
     const record = {
         id: 'model',
@@ -397,32 +544,67 @@ async function handleModelSelectionChange() {
 }
 
 
+function detectApiProvider(baseUrl) {
+    if (!baseUrl) return API_PROVIDERS.GEMINI; // Empty base URL = Gemini
+    const url = baseUrl.toLowerCase();
+    if (url.includes('generativelanguage.googleapis.com') ||
+        url.includes('gemini') ||
+        url.includes('google')) {
+        return API_PROVIDERS.GEMINI;
+    }
+    return API_PROVIDERS.OPENAI;
+}
+
+
 async function initOpenAiCredentials() {
     try {
         const storedCreds = await getConfigRecord('llmApiCreds');
         if (!storedCreds) return;
 
-        // Populate fields
-        const baseUrlField = document.getElementById('llm-base-url');
-        const apiKeyField = document.getElementById('llm-api-key');
+        const provider = storedCreds.provider || detectApiProvider(storedCreds.baseUrl);
 
-        if (baseUrlField && apiKeyField) {
-            baseUrlField.value = storedCreds.baseUrl ?? '';
-            apiKeyField.value = storedCreds.apiKey ?? '';
+        // Activate correct tab
+        const tabId = provider === API_PROVIDERS.GEMINI ? 'tab-gemini' : 'tab-openai';
+        document.getElementById(tabId)?.click();
 
-            const isValid = await validateOpenAiApiKey(storedCreds.baseUrl, storedCreds.apiKey);
+        // Populate fields based on provider
+        if (provider === API_PROVIDERS.GEMINI) {
+            const geminiApiKeyField = document.getElementById('gemini-api-key');
+            if (geminiApiKeyField) {
+                geminiApiKeyField.value = storedCreds.apiKey ?? '';
+            }
+        } else {
+            const openaiBaseUrlField = document.getElementById('openai-base-url');
+            const openaiApiKeyField = document.getElementById('openai-api-key');
+            if (openaiBaseUrlField) openaiBaseUrlField.value = storedCreds.baseUrl ?? '';
+            if (openaiApiKeyField) openaiApiKeyField.value = storedCreds.apiKey ?? '';
+        }
+
+        // Validate and create client
+        let isValid = false;
+
+        if (provider === API_PROVIDERS.GEMINI) {
+            isValid = await validateGeminiApiKey(storedCreds.apiKey);
+            if (isValid) {
+                await createGlobalGeminiClient(storedCreds.apiKey);
+                setApiKeyMessage('✓ Gemini API key is valid.', true);
+            }
+        } else {
+            isValid = await validateOpenAiApiKey(storedCreds.baseUrl, storedCreds.apiKey);
             if (isValid) {
                 await createGlobalOpenAiClient(storedCreds.baseUrl, storedCreds.apiKey);
                 setApiKeyMessage('✓ OpenAI API key is valid.', true);
-            } else {
-                setApiKeyMessage('OpenAI API key appears to be invalid.', false);
-                await deleteConfigRecord('llmApiCreds');
-                await deleteConfigRecord('model');
-                clearModelsDropdown();
             }
         }
+
+        if (!isValid) {
+            setApiKeyMessage('Stored API key appears to be invalid.', false);
+            await deleteConfigRecord('llmApiCreds');
+            await deleteConfigRecord('model');
+            clearModelsDropdown();
+        }
     } catch (err) {
-        console.error('Error retrieving OpenAI credentials from IDB:', err);
+        console.error('Error retrieving API credentials from IDB:', err);
     }
 }
 
@@ -430,23 +612,43 @@ async function initOpenAiCredentials() {
 async function submitOpenAiCredentials() {
     clearApiKeyMessage();
 
-    const baseUrlField = document.getElementById('llm-base-url');
-    const apiKeyField = document.getElementById('llm-api-key');
-    if (!baseUrlField || !apiKeyField) {
-        setApiKeyMessage('Missing input fields for base URL or API key.', false);
+    let baseUrl, apiKey;
+
+    if (selectedProvider === API_PROVIDERS.GEMINI) {
+        apiKey = document.getElementById('gemini-api-key')?.value.trim();
+        baseUrl = '';
+    } else {
+        baseUrl = document.getElementById('openai-base-url')?.value.trim();
+        apiKey = document.getElementById('openai-api-key')?.value.trim();
+    }
+
+    if (!apiKey) {
+        setApiKeyMessage('Please provide an API key.', false);
         return;
     }
 
-    const baseUrl = baseUrlField.value.trim();
-    const apiKey = apiKeyField.value.trim();
-    if (!baseUrl || !apiKey) {
-        setApiKeyMessage('Please provide both Base URL and API key.', false);
-        return;
+    let isValid = false;
+
+    if (selectedProvider === API_PROVIDERS.GEMINI) {
+        isValid = await validateGeminiApiKey(apiKey);
+        if (isValid) {
+            await createGlobalGeminiClient(apiKey);
+            openaiClient = null;
+        }
+    } else {
+        if (!baseUrl) {
+            setApiKeyMessage('Please provide a Base URL for OpenAI-compatible APIs.', false);
+            return;
+        }
+        isValid = await validateOpenAiApiKey(baseUrl, apiKey);
+        if (isValid) {
+            await createGlobalOpenAiClient(baseUrl, apiKey);
+            geminiClient = null;
+        }
     }
 
-    const isValid = await validateOpenAiApiKey(baseUrl, apiKey);
     if (!isValid) {
-        setApiKeyMessage('Invalid API credentials. Please check your base URL and key.', false);
+        setApiKeyMessage('Invalid API credentials. Please check your API key.', false);
         clearModelsDropdown();
         await deleteConfigRecord('llmApiCreds');
         await deleteConfigRecord('model');
@@ -456,14 +658,14 @@ async function submitOpenAiCredentials() {
     try {
         const credsToStore = {
             id: 'llmApiCreds',
-            baseUrl,
-            apiKey
+            baseUrl: selectedProvider === API_PROVIDERS.GEMINI ? '' : baseUrl,
+            apiKey,
+            provider: selectedProvider
         };
         await saveConfigRecord(credsToStore);
 
-        await createGlobalOpenAiClient(baseUrl, apiKey);
-
-        setApiKeyMessage('✓ Your OpenAI credentials are valid and have been saved successfully!', true);
+        const providerName = selectedProvider === API_PROVIDERS.GEMINI ? 'Gemini' : 'OpenAI';
+        setApiKeyMessage(`✓ Your ${providerName} credentials are valid and saved!`, true);
     } catch (err) {
         setApiKeyMessage(`Error saving credentials: ${err.message}`, false);
     }
@@ -476,15 +678,22 @@ async function forgetOpenAiCredentials() {
         await deleteConfigRecord('llmApiCreds');
         await deleteConfigRecord('model');
 
-        const baseUrlField = document.getElementById('llm-base-url');
-        const apiKeyField = document.getElementById('llm-api-key');
-        if (baseUrlField) baseUrlField.value = '';
-        if (apiKeyField) apiKeyField.value = '';
+        // Clear OpenAI fields
+        const openaiBaseUrlField = document.getElementById('openai-base-url');
+        const openaiApiKeyField = document.getElementById('openai-api-key');
+        if (openaiBaseUrlField) openaiBaseUrlField.value = '';
+        if (openaiApiKeyField) openaiApiKeyField.value = '';
+
+        // Clear Gemini fields
+        const geminiApiKeyField = document.getElementById('gemini-api-key');
+        if (geminiApiKeyField) geminiApiKeyField.value = '';
 
         clearModelsDropdown();
         openaiClient = null;
+        geminiClient = null;
+        currentApiProvider = null;
 
-        setApiKeyMessage('OpenAI credentials have been removed.', true);
+        setApiKeyMessage('API credentials have been removed.', true);
     } catch (err) {
         setApiKeyMessage(`Error removing credentials: ${err.message}`, false);
     }
@@ -859,8 +1068,10 @@ async function getMissingInfo() {
 
     // Remote API credentials (always required)
     const creds = await getConfigRecord('llmApiCreds');
-    if (!creds || !creds.baseUrl || !creds.apiKey) {
-        missing.push('LLM API base URL and/or API key');
+    if (!creds || !creds.apiKey) {
+        missing.push('LLM API key');
+    } else if (creds.provider === API_PROVIDERS.OPENAI && !creds.baseUrl) {
+        missing.push('LLM API Base URL (required for OpenAI-compatible APIs)');
     }
 
     // Model selection
@@ -919,9 +1130,9 @@ function scrollToFirstMissingField(missingItem) {
         case /JSON Schema/i.test(missingItem):
             document.getElementById('config-url')?.scrollIntoView({behavior: 'smooth'});
             break;
-        case /LLM API base URL/i.test(missingItem):
+        case /Base URL/i.test(missingItem):
         case /API key/i.test(missingItem):
-            document.getElementById('llm-base-url')?.scrollIntoView({behavior: 'smooth'});
+            document.getElementById('tab-openai')?.scrollIntoView({behavior: 'smooth'});
             break;
         case /model selection/i.test(missingItem):
             document.getElementById('llm-model')?.scrollIntoView({behavior: 'smooth'});
@@ -1027,15 +1238,23 @@ function buildUserQuery(schema) {
 async function handleAuthError() {
     await deleteConfigRecord('llmApiCreds');
     await deleteConfigRecord('model');
-    const baseUrlField = document.getElementById('llm-base-url');
-    const apiKeyField = document.getElementById('llm-api-key');
-    if (baseUrlField) baseUrlField.value = '';
-    if (apiKeyField) apiKeyField.value = '';
+
+    // Clear OpenAI fields
+    const openaiBaseUrlField = document.getElementById('openai-base-url');
+    const openaiApiKeyField = document.getElementById('openai-api-key');
+    if (openaiBaseUrlField) openaiBaseUrlField.value = '';
+    if (openaiApiKeyField) openaiApiKeyField.value = '';
+
+    // Clear Gemini fields
+    const geminiApiKeyField = document.getElementById('gemini-api-key');
+    if (geminiApiKeyField) geminiApiKeyField.value = '';
 
     clearModelsDropdown();
     openaiClient = null;
+    geminiClient = null;
+    currentApiProvider = null;
     setApiKeyMessage('Your API key is invalid. Please re-enter a valid key.', false);
-    document.getElementById('llm-base-url')?.scrollIntoView({behavior: 'smooth'});
+    document.getElementById('tab-openai')?.scrollIntoView({behavior: 'smooth'});
 }
 
 
@@ -1308,6 +1527,62 @@ async function callOpenAiForExtraction(task) {
 }
 
 
+async function callGeminiForExtraction(task) {
+    const { report, schema, model, systemPrompt } = task;
+
+    const developerPrompt = buildDeveloperPrompt(systemPrompt, report.content);
+    const userQuery = buildUserQuery(schema);
+
+    const regex = /```json\s*([\s\S]*?)\s*```/;
+    let attempt = 0;
+
+    while (attempt < 3 && !extractionTerminated) {
+        try {
+            const response = await geminiClient.models.generateContent({
+                model: model,
+                contents: developerPrompt + '\n\n' + userQuery,
+                config: {
+                    temperature: 0.0
+                }
+            });
+
+            const message = response.text || '';
+            const match = message.match(regex);
+
+            if (match) {
+                try {
+                    return JSON.parse(match[1]);
+                } catch (err) {
+                    console.warn(`Attempt ${attempt + 1}: failed to parse JSON from Gemini output.`, err);
+                }
+            }
+        } catch (err) {
+            if (err.status === 401 || err.status === 403) {
+                const authError = new Error('Authentication error');
+                authError.isAuthError = true;
+                throw authError;
+            }
+            if (err.status === 429) {
+                throw err; // Let rate limiter handle
+            }
+            console.error(`Attempt ${attempt + 1}: Gemini extraction error:`, err);
+        }
+        attempt++;
+    }
+
+    return {};
+}
+
+
+async function executeExtractionTask(task) {
+    if (currentApiProvider === API_PROVIDERS.GEMINI) {
+        return await callGeminiForExtraction(task);
+    } else {
+        return await callOpenAiForExtraction(task);
+    }
+}
+
+
 async function buildExtractionTasks(reports, schemaFiles, systemPrompt, model) {
     const tasks = [];
     for (const report of reports) {
@@ -1435,7 +1710,7 @@ async function handleSubmitExtraction() {
         concurrencyScheduler = new DynamicConcurrentScheduler({
             initialConcurrency: 1,
             maxConcurrency: 50,
-            apiCallFn: callOpenAiForExtraction
+            apiCallFn: executeExtractionTask
         });
 
         const reportTaskCountMap = new Map();
@@ -1589,6 +1864,9 @@ async function cleanupWebLLMRecords() {
 
 async function init() {
     ui('app');
+
+    // Initialize provider tabs
+    initProviderTabs();
 
     // Clean up deprecated WebLLM records
     await cleanupWebLLMRecords();

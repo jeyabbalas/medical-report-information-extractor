@@ -7,10 +7,10 @@ function ui(divID) {
     const dataPrivacyNotice = `
 <p><span class="font-medium">Data privacy notice</span>: This application uses large language models (LLMs) to process data. It is important to understand how your data will be handled by them.</p>
 <ul class="list-disc list-inside">
-    <li><span class="font-medium">Data sharing</span>: When you use the app, the data you submit is sent to the LLM that you choose. This could be an LLM hosted by a third-party, like OpenAI, or an LLM that you host yourself.</li>
+    <li><span class="font-medium">Data sharing</span>: When you use the app, the data you submit is sent to the LLM that you choose. This could be an LLM hosted by a third-party, like OpenAI or Google (Gemini), or an LLM that you host yourself.</li>
     <li><span class="font-medium">Data use agreements</span>: Before submitting any data, especially sensitive information, carefully review the data use agreement of the data you will submit and the data privacy policy of the LLM provider. Make sure you understand and consent to how the LLM provider will use your data.</li>
-    <li><span class="font-medium">LLM API base URL</span>: You will be asked to provide the base URL of the LLM API you want to use. This helps you control where your data is sent. For example, if you choose OpenAI's API (<span class="font-mono px-1 rounded">https://api.openai.com/v1</span>), your data will be processed by OpenAI servers.</li>
-    <li><span class="font-medium">Self-hosting</span>: For increased data privacy, instead of using LLMs from third-party providers (e.g. OpenAI), consider self-hosting an LLM on your own machine and providing the corresponding base URL. This keeps your data under your direct control.</li>
+    <li><span class="font-medium">LLM API configuration</span>: You will be asked to provide API credentials. For OpenAI-compatible APIs, provide the base URL. For Google Gemini, leave the base URL empty and provide only your API key. This helps you control where your data is sent.</li>
+    <li><span class="font-medium">Self-hosting</span>: For increased data privacy, instead of using LLMs from third-party providers (e.g. OpenAI, Google), consider self-hosting an LLM on your own machine and providing the corresponding base URL. This keeps your data under your direct control.</li>
 </ul>
 `;
 
@@ -79,19 +79,64 @@ function ui(divID) {
         <div class="col-span-full">
             <h2 class="text-base sm:text-lg font-semibold leading-7 text-gray-900">LLM API configuration</h2>
 
-            <p class="mt-1 text-sm leading-6 text-gray-600">Provide the base URL of your LLM API endpoint and the associated API key. The endpoint must be compatible with OpenAI's API structure, requiring the <a target="_blank" class="underline text-green-700 text-sm font-mono" href="https://platform.openai.com/docs/api-reference/models">models</a> and <a target="_blank" class="underline text-green-700 text-sm font-mono" href="https://platform.openai.com/docs/api-reference/chat/create">chat/completions</a> endpoints. For example, to use the OpenAI API, set the base URL to <span class="font-mono px-1 rounded">https://api.openai.com/v1</span> and the API key can be generated at <a target="_blank" class="underline text-green-700 text-sm" href="https://platform.openai.com/api-keys">OpenAI API keys</a>. Optionally, an LLM can be self-hosted via an OpenAI-compatible API using tools like <a target="_blank" class="underline text-green-700 text-sm" href="https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html">vLLM</a>.</p>
-            
-            <div id="api-credentials-section" class="mt-3 sm:mt-4 -space-y-px rounded-md flex flex-col items-center">
-                <div class="relative rounded-md rounded-b-none px-3 pb-1.5 pt-2.5 w-full sm:w-3/4 md:w-2/3 lg:w-1/2 ring-1 ring-inset ring-gray-300 focus-within:z-10 focus-within:ring-2 focus-within:ring-green-600">
-                    <label for="llm-base-url" class="block text-xs font-medium text-gray-900">Base URL</label>
-                    <input type="url" name="llm-base-url" id="llm-base-url" class="block w-full border-0 p-0 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-0 text-sm sm:text-base sm:leading-6" placeholder="http://localhost:8000/v1" value="${llmBaseUrlDefault}" required>
-                </div>
-                <div class="relative rounded-md rounded-t-none px-3 pb-1.5 pt-2.5 w-full sm:w-3/4 md:w-2/3 lg:w-1/2 ring-1 ring-inset ring-gray-300 focus-within:z-10 focus-within:ring-2 focus-within:ring-green-600">
-                    <label for="llm-api-key" class="block text-xs font-medium text-gray-900">API key</label>
-                    <input type="password" name="llm-api-key" id="llm-api-key" class="block w-full border-0 p-0 text-gray-900 focus:outline-none focus:ring-0 text-sm sm:text-base sm:leading-6">
-                </div>
-                <div id="api-key-message-container" class="hidden w-full sm:w-3/4 md:w-2/3 lg:w-1/2"></div>
+            <!-- Provider Tabs -->
+            <div class="mt-3 border-b border-gray-200 flex justify-center">
+                <nav class="-mb-px flex space-x-4 sm:space-x-8" aria-label="Provider tabs">
+                    <button type="button" id="tab-openai"
+                            class="provider-tab whitespace-nowrap border-b-2 border-green-600 py-2 px-1 text-sm font-medium text-green-600"
+                            data-provider="openai">
+                        OpenAI / Compatible
+                    </button>
+                    <button type="button" id="tab-gemini"
+                            class="provider-tab whitespace-nowrap border-b-2 border-transparent py-2 px-1 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700"
+                            data-provider="gemini">
+                        Google Gemini
+                    </button>
+                </nav>
             </div>
+
+            <!-- OpenAI Tab Content -->
+            <div id="provider-openai" class="provider-panel mt-4">
+                <p class="text-sm leading-6 text-gray-600 mb-3 text-center">
+                    Provide the base URL and API key for OpenAI or any OpenAI-compatible API.
+                    For OpenAI, use <span class="font-mono bg-gray-100 px-1 rounded">https://api.openai.com/v1</span>.
+                    Get API keys at <a target="_blank" class="underline text-green-700" href="https://platform.openai.com/api-keys">OpenAI API keys</a>.
+                    Self-host via <a target="_blank" class="underline text-green-700" href="https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html">vLLM</a>.
+                </p>
+                <div class="-space-y-px rounded-md flex flex-col items-center">
+                    <div class="relative rounded-md rounded-b-none px-3 pb-1.5 pt-2.5 w-full sm:w-3/4 md:w-2/3 lg:w-1/2 ring-1 ring-inset ring-gray-300 focus-within:z-10 focus-within:ring-2 focus-within:ring-green-600">
+                        <label for="openai-base-url" class="block text-xs font-medium text-gray-900">Base URL</label>
+                        <input type="url" name="openai-base-url" id="openai-base-url"
+                               class="block w-full border-0 p-0 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-0 text-sm sm:text-base sm:leading-6"
+                               placeholder="https://api.openai.com/v1"
+                               value="${llmBaseUrlDefault}">
+                    </div>
+                    <div class="relative rounded-md rounded-t-none px-3 pb-1.5 pt-2.5 w-full sm:w-3/4 md:w-2/3 lg:w-1/2 ring-1 ring-inset ring-gray-300 focus-within:z-10 focus-within:ring-2 focus-within:ring-green-600">
+                        <label for="openai-api-key" class="block text-xs font-medium text-gray-900">API Key</label>
+                        <input type="password" name="openai-api-key" id="openai-api-key"
+                               class="block w-full border-0 p-0 text-gray-900 focus:outline-none focus:ring-0 text-sm sm:text-base sm:leading-6"
+                               placeholder="sk-...">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gemini Tab Content -->
+            <div id="provider-gemini" class="provider-panel hidden mt-4">
+                <p class="text-sm leading-6 text-gray-600 mb-3 text-center">
+                    Enter your Google Gemini API key. Get your API key from
+                    <a target="_blank" class="underline text-green-700" href="https://aistudio.google.com/app/apikey">Google AI Studio</a>.
+                </p>
+                <div class="flex flex-col items-center">
+                    <div class="relative rounded-md px-3 pb-1.5 pt-2.5 w-full sm:w-3/4 md:w-2/3 lg:w-1/2 ring-1 ring-inset ring-gray-300 focus-within:z-10 focus-within:ring-2 focus-within:ring-green-600">
+                        <label for="gemini-api-key" class="block text-xs font-medium text-gray-900">Gemini API Key</label>
+                        <input type="password" name="gemini-api-key" id="gemini-api-key"
+                               class="block w-full border-0 p-0 text-gray-900 focus:outline-none focus:ring-0 text-sm sm:text-base sm:leading-6"
+                               placeholder="AIza...">
+                    </div>
+                </div>
+            </div>
+
+            <div id="api-key-message-container" class="hidden mt-3 w-full sm:w-3/4 md:w-2/3 lg:w-1/2 mx-auto"></div>
         </div>
     
         <div id="submit-api-key-buttons" class="py-2 sm:py-4">
