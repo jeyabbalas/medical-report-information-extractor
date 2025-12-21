@@ -87,7 +87,7 @@ function setConfigErrorMessage(errorText) {
 
     if (!errorContainer.querySelector('.copy-error-button')) {
         errorContainer.innerHTML = `
-      <div class="relative bg-red-50 border border-red-300 text-red-800 rounded-lg p-3 text-sm max-h-96 overflow-y-auto">
+      <div class="relative mt-3 bg-red-50 border border-red-300 text-red-800 rounded-lg p-3 text-sm max-h-96 overflow-y-auto">
         <button class="copy-error-button absolute top-2 right-2 bg-white text-gray-500 border border-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded px-2 py-1 text-xs flex items-center gap-1" title="Copy entire error text">
           <span class="button-text">Copy</span>
         </button>
@@ -882,7 +882,11 @@ function displayFileList(files) {
         fileCard.className = 'relative flex flex-col items-center justify-center w-36 h-36 border border-gray-300 rounded cursor-pointer hover:bg-gray-50';
 
         fileCard.innerHTML = `
-      <button class="delete-file-btn absolute top-1 right-1 w-6 h-6 rounded-full bg-red-100 hover:bg-red-200 text-red-600 flex items-center justify-center text-sm font-bold" title="Remove file">&times;</button>
+      <button class="delete-file-btn absolute top-1 right-1 w-6 h-6 rounded-full bg-red-50 hover:bg-red-100 border border-red-300 flex items-center justify-center" title="Remove file">
+        <svg class="w-3 h-3 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
       <svg width="48" height="48" fill="currentColor" class="text-gray-400 my-2" viewBox="0 0 24 24">
         <path d="M14,2H6A2,2,0,0,0,4,4V20a2,2,0,0,0,2,2h12a2,
           2,0,0,0,2-2V8ZM13,9V3.5L18.5,9Z" />
