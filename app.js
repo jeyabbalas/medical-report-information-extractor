@@ -1,79 +1,85 @@
-import {ui} from './src/gui.js';
-import {validateJsonSchema} from './src/jsonSchemaUtils.js';
-import {
-    validateJsonLd,
-    buildPlainTable,
-    generateJsonLdDocForFileName,
-    generateJsonLdDocForProvenance,
-    buildTabularJsonLdDoc,
-    buildLinkedTable
-} from './src/jsonLdUtils.js';
+/**
+ * Medical Report Information Extractor
+ * Main Application Entry Point
+ *
+ * This application extracts structured information from medical reports using LLMs.
+ * Supports OpenAI-compatible APIs and Google Gemini.
+ */
+
+// =============================================================================
+// IMPORTS - Existing modules
+// =============================================================================
+import { ui } from './src/gui.js';
+import { validateJsonSchema } from './src/jsonSchemaUtils.js';
+import { validateJsonLd, buildPlainTable, buildLinkedTable } from './src/jsonLdUtils.js';
 import {
     saveConfigRecord,
     getConfigRecord,
     deleteConfigRecord,
     putUploadedFile,
     getAllUploadedFiles,
-    clearUploadedFiles
+    clearUploadedFiles,
+    deleteUploadedFile
 } from './src/db.js';
-import {DynamicConcurrentScheduler} from './src/apiCallManager.js';
+import { DynamicConcurrentScheduler } from './src/apiCallManager.js';
 
-import {OpenAI} from 'https://cdn.skypack.dev/openai@4.78.1?min';
-import {GoogleGenAI} from 'https://cdn.jsdelivr.net/npm/@google/genai@1.0.0/+esm';
+// =============================================================================
+// IMPORTS - New refactored modules
+// =============================================================================
+import { API_PROVIDERS, EXAMPLE_REPORT_URLS } from './src/core/constants.js';
+import { isAuthError } from './src/core/errors.js';
+import { buildDeveloperPrompt, buildUserQuery } from './src/extraction/prompts.js';
+import { buildExtractionTasks, countExtractionProgress, updateReportWithExtraction } from './src/extraction/engine.js';
+import { combineExtractedData } from './src/results/processor.js';
+import {
+    displayExtractedData,
+    clearDisplayedExtractedData,
+    displayJsonLdDoc,
+    clearDisplayedJsonLdDoc,
+    prepareJsonLdDoc
+} from './src/results/display.js';
+import {
+    disableSubmitButton,
+    updateClearButtonState,
+    showExtractionProgressContainer,
+    updateExtractionProgress,
+    isExtractionInProgress
+} from './src/ui/progress.js';
+import {
+    showMissingInfoModal,
+    showEraseDataConfirmationModal,
+    scrollToFirstMissingField,
+    showRateLimitEarlyTerminationMessage,
+    showModelChangeConfirmationModal
+} from './src/ui/modals.js';
+import {
+    initProviderTabs,
+    getSelectedProvider,
+    setSelectedProvider,
+    activateProviderTab,
+    clearModelsDropdown,
+    setApiKeyMessage,
+    clearApiKeyMessage
+} from './src/ui/providerTabs.js';
 
+// =============================================================================
+// IMPORTS - External libraries (from CDN)
+// =============================================================================
+import { OpenAI } from 'https://cdn.skypack.dev/openai@4.78.1?min';
+import { GoogleGenAI } from 'https://cdn.jsdelivr.net/npm/@google/genai@1.0.0/+esm';
 
+// =============================================================================
+// GLOBAL STATE
+// =============================================================================
 let openaiClient = null;
 let geminiClient = null;
 let extractionTerminated = false;
 let concurrencyScheduler = null;
-
-// API provider constants and tracking
-const API_PROVIDERS = {
-    OPENAI: 'openai',
-    GEMINI: 'gemini'
-};
 let currentApiProvider = null;
-let selectedProvider = API_PROVIDERS.OPENAI;  // Currently selected tab
 
-
-function initProviderTabs() {
-    const tabs = document.querySelectorAll('.provider-tab');
-    const panels = document.querySelectorAll('.provider-panel');
-
-    tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            const provider = tab.dataset.provider;
-            selectedProvider = provider === 'gemini' ? API_PROVIDERS.GEMINI : API_PROVIDERS.OPENAI;
-
-            // Update tab styling
-            tabs.forEach(t => {
-                t.classList.remove('border-green-600', 'text-green-600');
-                t.classList.add('border-transparent', 'text-gray-500');
-            });
-            tab.classList.remove('border-transparent', 'text-gray-500');
-            tab.classList.add('border-green-600', 'text-green-600');
-
-            // Show/hide panels
-            panels.forEach(panel => panel.classList.add('hidden'));
-            document.getElementById(`provider-${provider}`).classList.remove('hidden');
-        });
-    });
-}
-
-
-const exampleReportUrls = [
-    "https://raw.githubusercontent.com/jeyabbalas/medical-report-information-extractor/refs/heads/main/examples/bcn_generations_pathology_data/sample_reports/01.txt",
-    "https://raw.githubusercontent.com/jeyabbalas/medical-report-information-extractor/refs/heads/main/examples/bcn_generations_pathology_data/sample_reports/02.txt",
-    "https://raw.githubusercontent.com/jeyabbalas/medical-report-information-extractor/refs/heads/main/examples/bcn_generations_pathology_data/sample_reports/03.txt",
-    "https://raw.githubusercontent.com/jeyabbalas/medical-report-information-extractor/refs/heads/main/examples/bcn_generations_pathology_data/sample_reports/04.txt",
-    "https://raw.githubusercontent.com/jeyabbalas/medical-report-information-extractor/refs/heads/main/examples/bcn_generations_pathology_data/sample_reports/05.txt"
-];
-
-
-/* -------------------------------------------------------------
- * CONFIGURATION FILE LOADING
- * -------------------------------------------------------------
- */
+// =============================================================================
+// CONFIGURATION FILE LOADING
+// =============================================================================
 
 function setConfigErrorMessage(errorText) {
     const errorContainer = document.getElementById('config-error-message-container');
@@ -100,14 +106,12 @@ function setConfigErrorMessage(errorText) {
     errorContainer.classList.remove('hidden');
 }
 
-
 function clearConfigErrorMessage() {
     const errorContainer = document.getElementById('config-error-message-container');
     if (!errorContainer) return;
     errorContainer.innerHTML = '';
     errorContainer.classList.add('hidden');
 }
-
 
 async function copyConfigErrorMessage() {
     const errorContainer = document.getElementById('config-error-message-container');
@@ -123,10 +127,8 @@ async function copyConfigErrorMessage() {
 
     try {
         await navigator.clipboard.writeText(errorTextDiv.textContent);
-
         copyBtn.className = 'copy-error-button absolute top-2 right-2 bg-white text-green-600 border border-green-400 rounded px-2 py-1 text-xs flex items-center gap-1';
         buttonText.textContent = '✓';
-
         setTimeout(() => {
             copyBtn.className = originalClasses;
             buttonText.textContent = 'Copy';
@@ -134,7 +136,6 @@ async function copyConfigErrorMessage() {
     } catch (err) {
         copyBtn.className = 'copy-error-button absolute top-2 right-2 bg-white text-red-600 border border-red-400 rounded px-2 py-1 text-xs flex items-center gap-1';
         buttonText.textContent = '!';
-
         setTimeout(() => {
             copyBtn.className = originalClasses;
             buttonText.textContent = 'Copy';
@@ -142,12 +143,10 @@ async function copyConfigErrorMessage() {
     }
 }
 
-
 function showConfigLoadingBar() {
     const wrapper = document.getElementById('config-loading-bar-wrapper');
     if (wrapper) wrapper.classList.remove('hidden');
 }
-
 
 function hideConfigLoadingBar() {
     const wrapper = document.getElementById('config-loading-bar-wrapper');
@@ -156,14 +155,12 @@ function hideConfigLoadingBar() {
     if (bar) bar.style.width = '0%';
 }
 
-
 function updateConfigLoadingBar(percent) {
     const bar = document.getElementById('config-loading-bar');
     if (bar) {
         bar.style.width = `${percent}%`;
     }
 }
-
 
 async function loadConfig(configUrl) {
     clearConfigErrorMessage();
@@ -200,7 +197,7 @@ async function loadConfig(configUrl) {
         }
 
         // Validate config JSON structure
-        const {systemPrompt, schemaFiles, jsonldContextFiles} = configJson;
+        const { systemPrompt, schemaFiles, jsonldContextFiles } = configJson;
         if (!systemPrompt) {
             setConfigErrorMessage(`config.json is missing "systemPrompt" property.`);
             return;
@@ -241,7 +238,7 @@ async function loadConfig(configUrl) {
                     throw new Error(`Failed to fetch schema file. HTTP ${schemaResp.status}`);
                 }
                 const schemaJson = await schemaResp.json();
-                const {valid, error} = await validateJsonSchema(schemaJson);
+                const { valid, error } = await validateJsonSchema(schemaJson);
                 if (!valid) {
                     throw new Error(`Schema file at ${fileUrl} is not a valid JSON Schema: ${error}`);
                 }
@@ -262,7 +259,7 @@ async function loadConfig(configUrl) {
                     throw new Error(`Failed to fetch JSON-LD file. HTTP ${jsonldResp.status}`);
                 }
                 const jsonldDoc = await jsonldResp.json();
-                const {valid, error} = await validateJsonLd(jsonldDoc);
+                const { valid, error } = await validateJsonLd(jsonldDoc);
                 if (!valid) {
                     throw new Error(`JSON-LD file at ${fileUrl} is invalid: ${error}`);
                 }
@@ -306,33 +303,9 @@ async function loadConfig(configUrl) {
     }
 }
 
-/* -------------------------------------------------------------
- * OPENAI API CREDENTIAL VALIDATION & MODEL SELECTION
- * -------------------------------------------------------------
- */
-
-function setApiKeyMessage(message, isSuccess = false) {
-    const container = document.getElementById('api-key-message-container');
-    if (!container) return;
-
-    container.className = 'relative p-3 text-sm rounded-lg border my-2';
-
-    if (isSuccess) {
-        container.classList.add('bg-green-50', 'text-green-800', 'border-green-300');
-    } else {
-        container.classList.add('bg-red-50', 'text-red-800', 'border-red-300');
-    }
-    container.textContent = message;
-}
-
-
-function clearApiKeyMessage() {
-    const container = document.getElementById('api-key-message-container');
-    if (!container) return;
-    container.textContent = '';
-    container.className = 'hidden';
-}
-
+// =============================================================================
+// API CREDENTIAL VALIDATION & MODEL SELECTION
+// =============================================================================
 
 async function validateOpenAiApiKey(baseUrl, apiKey) {
     try {
@@ -354,23 +327,20 @@ async function validateOpenAiApiKey(baseUrl, apiKey) {
     }
 }
 
-
 async function validateGeminiApiKey(apiKey) {
     if (!apiKey) return false;
     try {
-        const tempClient = new GoogleGenAI({apiKey});
+        const tempClient = new GoogleGenAI({ apiKey });
         const pager = await tempClient.models.list();
-        // Check if we can iterate the models
         for await (const model of pager) {
-            return true; // If we get at least one model, key is valid
+            return true;
         }
-        return true; // Empty list is still valid
+        return true;
     } catch (error) {
         console.error('Gemini API key validation failed:', error);
         return false;
     }
 }
-
 
 async function createGlobalOpenAiClient(baseUrl, apiKey) {
     openaiClient = new OpenAI({
@@ -382,13 +352,11 @@ async function createGlobalOpenAiClient(baseUrl, apiKey) {
     await populateModelsDropdown();
 }
 
-
 async function createGlobalGeminiClient(apiKey) {
-    geminiClient = new GoogleGenAI({apiKey});
+    geminiClient = new GoogleGenAI({ apiKey });
     currentApiProvider = API_PROVIDERS.GEMINI;
     await populateGeminiModelsDropdown();
 }
-
 
 async function populateModelsDropdown() {
     if (!openaiClient) return;
@@ -435,7 +403,6 @@ async function populateModelsDropdown() {
     }
 }
 
-
 async function populateGeminiModelsDropdown() {
     const selectEl = document.getElementById('llm-model');
     if (!selectEl || !geminiClient) return;
@@ -448,7 +415,6 @@ async function populateGeminiModelsDropdown() {
 
         for await (const model of pager) {
             const name = model.name || '';
-            // Include all gemini models, exclude only embeddings
             if (name.includes('gemini') && !name.includes('embedding')) {
                 textModels.push({
                     id: name.replace('models/', ''),
@@ -457,7 +423,6 @@ async function populateGeminiModelsDropdown() {
             }
         }
 
-        // Fallback: if no gemini models found, show all non-embedding models
         if (!textModels.length) {
             const pager2 = await geminiClient.models.list();
             for await (const model of pager2) {
@@ -476,7 +441,6 @@ async function populateGeminiModelsDropdown() {
             return;
         }
 
-        // Sort by name descending (newer versions first)
         textModels.sort((a, b) => b.id.localeCompare(a.id));
 
         const storedModel = await getConfigRecord('model');
@@ -488,7 +452,6 @@ async function populateGeminiModelsDropdown() {
             selectEl.appendChild(opt);
         }
 
-        // Select preferred model (default: gemini-flash-lite-latest)
         let modelToSelect;
         if (storedModel?.name) {
             const exists = Array.from(selectEl.options).some(opt => opt.value === storedModel.name);
@@ -521,7 +484,6 @@ async function populateGeminiModelsDropdown() {
     }
 }
 
-
 async function storeSelectedModelInIdb(modelName) {
     const record = {
         id: 'model',
@@ -529,7 +491,6 @@ async function storeSelectedModelInIdb(modelName) {
     };
     await saveConfigRecord(record);
 }
-
 
 async function handleModelSelectionChange() {
     const selectEl = document.getElementById('llm-model');
@@ -543,9 +504,8 @@ async function handleModelSelectionChange() {
     }
 }
 
-
 function detectApiProvider(baseUrl) {
-    if (!baseUrl) return API_PROVIDERS.GEMINI; // Empty base URL = Gemini
+    if (!baseUrl) return API_PROVIDERS.GEMINI;
     const url = baseUrl.toLowerCase();
     if (url.includes('generativelanguage.googleapis.com') ||
         url.includes('gemini') ||
@@ -555,7 +515,6 @@ function detectApiProvider(baseUrl) {
     return API_PROVIDERS.OPENAI;
 }
 
-
 async function initOpenAiCredentials() {
     try {
         const storedCreds = await getConfigRecord('llmApiCreds');
@@ -564,8 +523,7 @@ async function initOpenAiCredentials() {
         const provider = storedCreds.provider || detectApiProvider(storedCreds.baseUrl);
 
         // Activate correct tab
-        const tabId = provider === API_PROVIDERS.GEMINI ? 'tab-gemini' : 'tab-openai';
-        document.getElementById(tabId)?.click();
+        activateProviderTab(provider);
 
         // Populate fields based on provider
         if (provider === API_PROVIDERS.GEMINI) {
@@ -608,10 +566,10 @@ async function initOpenAiCredentials() {
     }
 }
 
-
 async function submitOpenAiCredentials() {
     clearApiKeyMessage();
 
+    const selectedProvider = getSelectedProvider();
     let baseUrl, apiKey;
 
     if (selectedProvider === API_PROVIDERS.GEMINI) {
@@ -671,7 +629,6 @@ async function submitOpenAiCredentials() {
     }
 }
 
-
 async function forgetOpenAiCredentials() {
     clearApiKeyMessage();
     try {
@@ -699,18 +656,9 @@ async function forgetOpenAiCredentials() {
     }
 }
 
-
-function clearModelsDropdown() {
-    const selectEl = document.getElementById('llm-model');
-    if (!selectEl) return;
-    selectEl.innerHTML = `<option value="" disabled selected>Set URL/API key above to see models list</option>`;
-}
-
-
-/* -------------------------------------------------------------
- * FILE UPLOAD
- * -------------------------------------------------------------
- */
+// =============================================================================
+// FILE UPLOAD
+// =============================================================================
 
 let fileUploadBarWrapper = null;
 let fileUploadBar = null;
@@ -720,7 +668,6 @@ function showFileUploadBar() {
     fileUploadBarWrapper.classList.remove('hidden');
 }
 
-
 function hideFileUploadBar() {
     if (!fileUploadBarWrapper) return;
     fileUploadBarWrapper.classList.add('hidden');
@@ -729,12 +676,10 @@ function hideFileUploadBar() {
     }
 }
 
-
 function updateFileUploadBar(percent) {
     if (!fileUploadBar) return;
     fileUploadBar.style.width = `${percent}%`;
 }
-
 
 async function fetchAndStoreExampleFiles(urls) {
     await clearUploadedFiles();
@@ -775,9 +720,7 @@ async function fetchAndStoreExampleFiles(urls) {
     displayFileList(allFiles);
 }
 
-
 function initFileUploadEventBindings(dropArea) {
-    // Drag-and-drop
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
         dropArea.addEventListener(eventName, (e) => {
             e.preventDefault();
@@ -799,7 +742,6 @@ function initFileUploadEventBindings(dropArea) {
         await handleFiles(e.dataTransfer.files);
     });
 
-    // Manual file input
     const fileInput = dropArea.querySelector('#file-upload');
     if (fileInput) {
         fileInput.addEventListener('change', async () => {
@@ -809,15 +751,13 @@ function initFileUploadEventBindings(dropArea) {
         });
     }
 
-    // Example file upload
     const exampleLink = dropArea.querySelector('#upload-example-reports-link');
     if (exampleLink) {
         exampleLink.addEventListener('click', async () => {
-            await fetchAndStoreExampleFiles(exampleReportUrls);
+            await fetchAndStoreExampleFiles(EXAMPLE_REPORT_URLS);
         });
     }
 }
-
 
 function restoreDefaultDropAreaUI(dropArea) {
     const parent = dropArea.parentNode;
@@ -831,11 +771,11 @@ function restoreDefaultDropAreaUI(dropArea) {
     newDropArea.innerHTML = `
       <div class="text-center">
         <div id="file-upload-icon">
-          <svg class="mx-auto h-10 w-10 sm:h-14 sm:w-14 text-gray-300" 
+          <svg class="mx-auto h-10 w-10 sm:h-14 sm:w-14 text-gray-300"
                viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
             <path fill-rule="evenodd" clip-rule="evenodd"
-                  d="M11.956 6h.05a2.99 2.99 0 0 1 2.117.879 
-                     3.003 3.003 0 0 1 0 4.242 
+                  d="M11.956 6h.05a2.99 2.99 0 0 1 2.117.879
+                     3.003 3.003 0 0 1 0 4.242
                      2.99 2.99 0 0 1-2.117.879h-1.995v-1h1.995
                      a2.002 2.002 0 0 0 0-4h-.914l-.123-.857
                      a2.49 2.49 0 0 0-2.126-2.122
@@ -857,7 +797,7 @@ function restoreDefaultDropAreaUI(dropArea) {
         <div id="progress-ring" class="hidden">
           <div class="relative inline-flex items-center justify-center">
             <svg class="progress-ring" width="84" height="84">
-              <circle class="progress-ring__circle" stroke="green" stroke-width="6" 
+              <circle class="progress-ring__circle" stroke="green" stroke-width="6"
                       fill="transparent" r="36" cx="42" cy="42"/>
             </svg>
             <div class="progress-ring-text absolute text-sm sm:text-md text-green-600 font-semibold">
@@ -867,7 +807,7 @@ function restoreDefaultDropAreaUI(dropArea) {
         </div>
         <div class="mt-3 sm:mt-4 flex flex-col sm:flex-row items-center justify-center text-sm leading-6 text-gray-600">
           <label for="file-upload" class="relative cursor-pointer rounded-md bg-white font-semibold text-green-600
-                 focus-within:outline-none focus-within:ring-2 focus-within:ring-green-600 
+                 focus-within:outline-none focus-within:ring-2 focus-within:ring-green-600
                  focus-within:ring-offset-2 hover:text-green-500">
             <span>Upload text reports</span>
             <input id="file-upload" name="file-upload" class="sr-only" type="file" multiple accept=".txt">
@@ -875,7 +815,7 @@ function restoreDefaultDropAreaUI(dropArea) {
           <p class="mt-1 sm:mt-0 sm:pl-1">-or- Drag and drop files here</p>
           <p class="mt-2 sm:mt-0 sm:pl-1">
             -or-
-            <a id="upload-example-reports-link" href="javascript:void(0);" 
+            <a id="upload-example-reports-link" href="javascript:void(0);"
                class="underline text-blue-600 hover:text-blue-800">
                Click here to upload example pathology reports
             </a>
@@ -888,7 +828,6 @@ function restoreDefaultDropAreaUI(dropArea) {
     initFileUploadEventBindings(newDropArea);
 }
 
-
 function displayFileContent(file) {
     const dropArea = document.getElementById('file-drop-area');
     if (!dropArea) return;
@@ -900,7 +839,7 @@ function displayFileContent(file) {
     const dropAreaHeight = dropArea.offsetHeight || 200;
 
     contentWrapper.innerHTML = `
-    <button id="back-to-list" class="mb-2 inline-flex items-center px-3 py-1 
+    <button id="back-to-list" class="mb-2 inline-flex items-center px-3 py-1
         border border-gray-300 text-sm rounded hover:bg-gray-200 text-gray-600">
       ← Back
     </button>
@@ -921,7 +860,6 @@ ${file.content}
     }
 }
 
-
 function displayFileList(files) {
     const dropArea = document.getElementById('file-drop-area');
     if (!dropArea) return;
@@ -941,9 +879,10 @@ function displayFileList(files) {
 
     files.forEach(file => {
         const fileCard = document.createElement('div');
-        fileCard.className = 'flex flex-col items-center justify-center w-36 h-36 border border-gray-300 rounded cursor-pointer hover:bg-gray-50';
+        fileCard.className = 'relative flex flex-col items-center justify-center w-36 h-36 border border-gray-300 rounded cursor-pointer hover:bg-gray-50';
 
         fileCard.innerHTML = `
+      <button class="delete-file-btn absolute top-1 right-1 w-6 h-6 rounded-full bg-red-100 hover:bg-red-200 text-red-600 flex items-center justify-center text-sm font-bold" title="Remove file">&times;</button>
       <svg width="48" height="48" fill="currentColor" class="text-gray-400 my-2" viewBox="0 0 24 24">
         <path d="M14,2H6A2,2,0,0,0,4,4V20a2,2,0,0,0,2,2h12a2,
           2,0,0,0,2-2V8ZM13,9V3.5L18.5,9Z" />
@@ -951,8 +890,20 @@ function displayFileList(files) {
       <p class="text-sm text-gray-700 break-all px-2 text-center">${file.name}</p>
     `;
 
-        fileCard.addEventListener('click', () => {
-            displayFileContent(file);
+        // Delete button handler
+        const deleteBtn = fileCard.querySelector('.delete-file-btn');
+        deleteBtn.addEventListener('click', async (e) => {
+            e.stopPropagation(); // Prevent file content display
+            await deleteUploadedFile(file.id);
+            const remainingFiles = await getAllUploadedFiles();
+            displayFileList(remainingFiles);
+        });
+
+        // Click on card (not delete button) shows file content
+        fileCard.addEventListener('click', (e) => {
+            if (!e.target.classList.contains('delete-file-btn')) {
+                displayFileContent(file);
+            }
         });
 
         fileListWrapper.appendChild(fileCard);
@@ -960,7 +911,6 @@ function displayFileList(files) {
 
     dropArea.appendChild(fileListWrapper);
 }
-
 
 async function handleFiles(fileList) {
     await clearUploadedFiles();
@@ -991,14 +941,12 @@ async function handleFiles(fileList) {
     displayFileList(allFiles);
 }
 
-
 function stopExtraction() {
     extractionTerminated = true;
     if (concurrencyScheduler) {
         concurrencyScheduler.terminate();
     }
 }
-
 
 async function initFileUpload() {
     const fileUploadContainer = document.getElementById('file-upload-container');
@@ -1046,11 +994,9 @@ async function initFileUpload() {
     displayFileList(filesInDb);
 }
 
-/* -------------------------------------------------------------
- * INFORMATION EXTRACTION
- * -------------------------------------------------------------
- */
-
+// =============================================================================
+// INFORMATION EXTRACTION
+// =============================================================================
 
 async function getMissingInfo() {
     const missing = [];
@@ -1066,7 +1012,7 @@ async function getMissingInfo() {
         }
     }
 
-    // Remote API credentials (always required)
+    // Remote API credentials
     const creds = await getConfigRecord('llmApiCreds');
     if (!creds || !creds.apiKey) {
         missing.push('LLM API key');
@@ -1089,163 +1035,15 @@ async function getMissingInfo() {
     return missing;
 }
 
-
-function showMissingInfoModal(missingItems) {
-    return new Promise((resolve) => {
-        const overlay = document.createElement('div');
-        overlay.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
-
-        const modal = document.createElement('div');
-        modal.className = 'bg-white rounded-lg p-4 max-w-md w-full';
-        modal.innerHTML = `
-          <h2 class="text-lg font-semibold mb-2">Information Missing</h2>
-          <p class="mb-3">Please provide the following information before data extraction:</p>
-          <ul class="list-disc ml-6 mb-4">
-            ${missingItems.map(i => `<li>${i}</li>`).join('')}
-          </ul>
-          <div class="flex justify-end">
-            <button id="missing-modal-ok" class="bg-green-800 hover:bg-green-700 text-white px-4 py-2 rounded">
-              OK
-            </button>
-          </div>
-        `;
-
-        overlay.appendChild(modal);
-        document.body.appendChild(overlay);
-
-        const closeBtn = modal.querySelector('#missing-modal-ok');
-        closeBtn.addEventListener('click', () => {
-            document.body.removeChild(overlay);
-            resolve();
-        });
-    });
-}
-
-
-function scrollToFirstMissingField(missingItem) {
-    if (!missingItem) return;
-    switch (true) {
-        case /config\.json/i.test(missingItem):
-        case /System prompt/i.test(missingItem):
-        case /JSON Schema/i.test(missingItem):
-            document.getElementById('config-url')?.scrollIntoView({behavior: 'smooth'});
-            break;
-        case /Base URL/i.test(missingItem):
-        case /API key/i.test(missingItem):
-            document.getElementById('tab-openai')?.scrollIntoView({behavior: 'smooth'});
-            break;
-        case /model selection/i.test(missingItem):
-            document.getElementById('llm-model')?.scrollIntoView({behavior: 'smooth'});
-            break;
-        case /uploaded report/i.test(missingItem):
-            document.getElementById('file-drop-area')?.scrollIntoView({behavior: 'smooth'});
-            break;
-        default:
-            window.scrollTo({top: 0, behavior: 'smooth'});
-            break;
-    }
-}
-
-
-function disableSubmitButton(disable) {
-    const submitBtn = document.getElementById('submit-btn');
-    if (!submitBtn) return;
-
-    if (disable) {
-        submitBtn._originalHTML = submitBtn.innerHTML;
-        submitBtn.innerHTML = `
-            <svg aria-hidden="true" role="status" class="inline w-4 h-4 mr-2 text-white animate-spin" viewBox="0 0 100 101" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M100 50.5908C100 78.2051 77.6142 100.591 50 100.591C22.3858 100.591 0 78.2051 0 50.5908C0 22.9766 22.3858 0.59082 50 0.59082C77.6142 0.59082 100 22.9766 100 50.5908ZM9.08144 50.5908C9.08144 73.1895 27.4013 91.5094 50 91.5094C72.5987 91.5094 90.9186 73.1895 90.9186 50.5908C90.9186 27.9921 72.5987 9.67226 50 9.67226C27.4013 9.67226 9.08144 27.9921 9.08144 50.5908Z" fill="#E5E7EB"/>
-                <path d="M93.9676 39.0409C96.393 38.4038 97.8624 35.9116 97.0079 33.5539C95.2932 28.8227 92.871 24.3692 89.8167 20.348C85.8452 15.1192 80.8826 10.7238 75.2124 7.41289C69.5422 4.10194 63.2754 1.94025 56.7698 1.05124C51.7666 0.367541 46.6976 0.446843 41.7345 1.27873C39.2613 1.69328 37.813 4.19778 38.4501 6.62326C39.0873 9.04874 41.5694 10.4717 44.0505 10.1071C47.8511 9.54855 51.7191 9.52689 55.5402 10.0491C60.8642 10.7766 65.9928 12.5457 70.6331 15.2552C75.2735 17.9648 79.3347 21.5619 82.5849 25.841C84.9175 28.9121 86.7997 32.2913 88.1811 35.8758C89.083 38.2158 91.5421 39.6781 93.9676 39.0409Z" fill="currentColor"/>
-            </svg>
-            Processing...
-        `;
-        submitBtn.disabled = true;
-        submitBtn.classList.add('cursor-not-allowed');
-    } else {
-        submitBtn.innerHTML = submitBtn._originalHTML || 'Submit';
-        submitBtn.disabled = false;
-        submitBtn.classList.remove('cursor-not-allowed');
-    }
-}
-
-
-function updateClearButtonState(text, disabled = false) {
-    const clearBtn = document.getElementById('clear-btn');
-    if (!clearBtn) return;
-
-    clearBtn.disabled = disabled;
-
-    clearBtn.classList.remove(
-        'bg-white', 'text-gray-700', 'hover:bg-gray-50', 'border-gray-300',
-        'bg-red-800', 'text-white', 'hover:bg-red-700'
-    );
-
-    if (text === 'Clear') {
-        clearBtn.classList.add('bg-white', 'text-gray-700', 'hover:bg-gray-50', 'border-gray-300');
-    } else {
-        clearBtn.classList.add('bg-red-800', 'text-white', 'hover:bg-red-700');
-    }
-
-    clearBtn.textContent = text;
-}
-
-
-function showExtractionProgressContainer(show) {
-    const container = document.getElementById('extraction-progress-container');
-    if (!container) return;
-    if (show) {
-        container.classList.remove('hidden');
-    } else {
-        container.classList.add('hidden');
-        // Reset bar
-        updateExtractionProgress(0, 1); // set bar to 0
-        const ring = document.getElementById('extraction-progress-ring');
-        if (ring) ring.classList.add('hidden');
-    }
-}
-
-
-function updateExtractionProgress(completedTasks, totalTasks, completedReports, totalReports) {
-    const bar = document.getElementById('extraction-progress-bar');
-    const label = document.getElementById('extraction-progress-label');
-
-    let pct = 0;
-    if (totalTasks > 0) {
-        pct = Math.round((completedTasks / totalTasks) * 100);
-    }
-    if (bar) {
-        bar.style.width = pct + '%';
-    }
-
-    if (label) {
-        label.textContent = `Extracting ${completedReports} of ${totalReports} reports...`;
-    }
-}
-
-
-function buildDeveloperPrompt(systemPrompt, report) {
-    return `<instructions>\n${systemPrompt}\n</instructions>\n\n<report>\n${report}\n</report>`
-}
-
-
-function buildUserQuery(schema) {
-    const keys = Object.keys(schema.properties || {});
-    return `<query>\n<json_keys>\n[${keys.join(', ')}]\n</json_keys>\n<json_schema>\n\`\`\`json${JSON.stringify(schema, null, 2)}\`\`\`\n</json_schema>\n</query>`;
-}
-
-
 async function handleAuthError() {
     await deleteConfigRecord('llmApiCreds');
     await deleteConfigRecord('model');
 
-    // Clear OpenAI fields
     const openaiBaseUrlField = document.getElementById('openai-base-url');
     const openaiApiKeyField = document.getElementById('openai-api-key');
     if (openaiBaseUrlField) openaiBaseUrlField.value = '';
     if (openaiApiKeyField) openaiApiKeyField.value = '';
 
-    // Clear Gemini fields
     const geminiApiKeyField = document.getElementById('gemini-api-key');
     if (geminiApiKeyField) geminiApiKeyField.value = '';
 
@@ -1254,230 +1052,8 @@ async function handleAuthError() {
     geminiClient = null;
     currentApiProvider = null;
     setApiKeyMessage('Your API key is invalid. Please re-enter a valid key.', false);
-    document.getElementById('tab-openai')?.scrollIntoView({behavior: 'smooth'});
+    document.getElementById('tab-openai')?.scrollIntoView({ behavior: 'smooth' });
 }
-
-
-async function performLLMExtraction(developerPrompt, userQuery, model) {
-    if (!openaiClient) {
-        await handleAuthError();
-        throw new Error('OpenAI client not initialized');
-    }
-
-    const regex = /```json\s*([\s\S]*?)\s*```/;
-    let attempt = 0;
-    while (attempt < 3 && !extractionTerminated) {
-        try {
-            await rateLimiter.enforceRateLimit();
-
-            const response = await openaiClient.chat.completions.create({
-                model: model,
-                messages: [
-                    {role: 'developer', content: developerPrompt},
-                    {role: 'user', content: userQuery}
-                ],
-                temperature: 0.0,
-                seed: 1234 + attempt
-            });
-
-            rateLimiter.resetErrorCount();
-
-            const message = response.choices?.[0]?.message?.content || '';
-            const match = message.match(regex);
-            if (match) {
-                try {
-                    return JSON.parse(match[1]);
-                } catch (err) {
-                    console.warn(`Failed to parse JSON generated by the LLM:`, err);
-                }
-            }
-        } catch (err) {
-            if (err.response && (err.response.status === 401 || err.response.status === 403)) {
-                const authError = new Error('Authentication error');
-                authError.isAuthError = true;
-                await handleAuthError();
-                throw authError;
-            }
-
-            const backoffTime = rateLimiter.handleError(err);
-            console.error(`Error during data extraction. Backing off for ${backoffTime}ms:`, err);
-            await rateLimiter.sleep(backoffTime);
-        }
-        attempt++;
-    }
-
-    // fallback if no valid JSON was output after 3 attempts
-    return {};
-}
-
-
-function combineExtractedData(reports) {
-    return reports.reduce((acc, r) => {
-        if (r.extractions && r.extractions.length > 0) {
-            const merged = {};
-            for (const extraction of r.extractions) {
-                const dataObj = extraction.data || {};
-                Object.entries(dataObj).forEach(([key, value]) => {
-                    merged[key] = value;
-                });
-            }
-            acc.push({
-                fileName: r.name,
-                ...merged
-            });
-        }
-        return acc;
-    }, []);
-}
-
-
-/**
- * Convert JSON data to CSV format
- * @param {Array} data - Array of objects to convert to CSV
- * @returns {string} CSV formatted string
- */
-function convertJsonToCsv(data) {
-    if (!data || data.length === 0) return '';
-
-    // Get all unique headers from all objects
-    const headers = Array.from(new Set(data.flatMap(d => Object.keys(d))));
-
-    // Create CSV header row
-    const csvHeader = headers.map(header => `"${header}"`).join(',');
-
-    // Create CSV data rows
-    const csvRows = data.map(row => {
-        return headers.map(header => {
-            const value = row[header];
-            if (value === null || value === undefined) {
-                return '""';
-            } else if (Array.isArray(value) || typeof value === 'object') {
-                // Escape quotes in JSON strings for CSV
-                return `"${JSON.stringify(value).replace(/"/g, '""')}"`;
-            } else {
-                // Escape quotes in regular strings for CSV
-                return `"${String(value).replace(/"/g, '""')}"`;
-            }
-        }).join(',');
-    });
-
-    return [csvHeader, ...csvRows].join('\n');
-}
-
-
-/**
- * Create download buttons for both JSON and CSV formats
- * @param {Array} data - The data to be downloaded
- * @returns {HTMLElement} Container with both download buttons
- */
-function createDownloadButtons(data) {
-    const btnContainer = document.createElement('div');
-    btnContainer.id = 'downloadBtnContainer';
-    btnContainer.className = 'flex justify-center gap-2 w-full my-2';
-
-    // JSON Download Button
-    const jsonBtn = document.createElement('button');
-    jsonBtn.className = 'inline-flex justify-center rounded-md border border-transparent bg-green-800 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2';
-    jsonBtn.textContent = 'Download JSON';
-    jsonBtn.addEventListener('click', (_) => {
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
-        const dlAnchorElem = document.createElement('a');
-        dlAnchorElem.setAttribute("href", dataStr);
-        dlAnchorElem.setAttribute("download", `extracted_information.json`);
-        dlAnchorElem.click();
-    });
-
-    // CSV Download Button
-    const csvBtn = document.createElement('button');
-    csvBtn.className = 'inline-flex justify-center rounded-md border border-transparent bg-green-800 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2';
-    csvBtn.textContent = 'Download CSV';
-    csvBtn.addEventListener('click', (_) => {
-        const csvData = convertJsonToCsv(data);
-        const dataStr = "data:text/csv;charset=utf-8," + encodeURIComponent(csvData);
-        const dlAnchorElem = document.createElement('a');
-        dlAnchorElem.setAttribute("href", dataStr);
-        dlAnchorElem.setAttribute("download", `extracted_information.csv`);
-        dlAnchorElem.click();
-    });
-
-    btnContainer.appendChild(jsonBtn);
-    btnContainer.appendChild(csvBtn);
-    return btnContainer;
-}
-
-
-function createDownloadDataButton(buttonLabel, data, isLinkedData = false) {
-    const btnContainer = document.createElement('div');
-    btnContainer.id = 'downloadBtnContainer';
-    btnContainer.className = 'flex justify-center w-full my-2';
-
-    const downloadBtn = document.createElement('button');
-    downloadBtn.className = 'inline-flex justify-center rounded-md border border-transparent bg-green-800 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2';
-    downloadBtn.textContent = buttonLabel;
-    downloadBtn.addEventListener('click', (_) => {
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
-        const dlAnchorElem = document.createElement('a');
-        dlAnchorElem.setAttribute("href", dataStr);
-        if (isLinkedData) {
-            dlAnchorElem.setAttribute("download", `extracted_information.jsonld`);
-        } else {
-            dlAnchorElem.setAttribute("download", `extracted_information.json`);
-        }
-        dlAnchorElem.click();
-    });
-
-    btnContainer.appendChild(downloadBtn);
-    return btnContainer;
-}
-
-
-function clearDisplayedExtractedData() {
-    const tableContainer = document.getElementById('info-extraction');
-    if (tableContainer) {
-        tableContainer.innerHTML = '';
-    }
-}
-
-
-function displayExtractedData(data) {
-    const tableContainer = document.getElementById('info-extraction');
-    if (tableContainer) {
-        clearDisplayedExtractedData();
-        const headers = Array.from(new Set(data.flatMap(d => Object.keys(d))));
-        tableContainer.appendChild(buildPlainTable(data, headers));
-        tableContainer.appendChild(createDownloadButtons(data));
-    }
-}
-
-
-function prepareJsonLdDoc(schemaFileUrls, jsonLdContextFiles, tabularData, provenance = {}) {
-    const jsonLdContextFilesCopy = jsonLdContextFiles.slice();
-    jsonLdContextFilesCopy.push(generateJsonLdDocForFileName());
-    const provenanceDoc = generateJsonLdDocForProvenance(
-        provenance.startedAtTime, provenance.endedAtTime,
-        provenance.applicationURL, provenance.chatCompletionsEndpoint,
-        provenance.modelName);
-    return buildTabularJsonLdDoc(schemaFileUrls, jsonLdContextFilesCopy, tabularData, provenanceDoc);
-}
-
-
-function clearDisplayedJsonLdDoc() {
-    const jsonLdContainer = document.getElementById('standardization');
-    if (jsonLdContainer) {
-        jsonLdContainer.innerHTML = '';
-    }
-}
-
-
-async function displayJsonLdDoc(jsonLdDoc) {
-    const jsonLdContainer = document.getElementById('standardization');
-    if (jsonLdContainer) {
-        clearDisplayedJsonLdDoc();
-        await buildLinkedTable(jsonLdContainer, jsonLdDoc);
-        jsonLdContainer.appendChild(createDownloadDataButton('Download JSON-LD', jsonLdDoc, true));
-    }
-}
-
 
 async function callOpenAiForExtraction(task) {
     const { report, schema, model, systemPrompt } = task;
@@ -1506,26 +1082,22 @@ async function callOpenAiForExtraction(task) {
                 try {
                     return JSON.parse(match[1]);
                 } catch (err) {
-                    console.warn(`Attempt ${attempt+1}: failed to parse JSON from LLM output.`, err);
+                    console.warn(`Attempt ${attempt + 1}: failed to parse JSON from LLM output.`, err);
                 }
             }
         } catch (err) {
-            // If the error is 401 or 403, handle auth
             if (err.response && (err.response.status === 401 || err.response.status === 403)) {
                 const authError = new Error('Authentication error');
                 authError.isAuthError = true;
                 throw authError;
             }
-            // Otherwise, throw so concurrency manager can handle backoff
             throw err;
         }
         attempt++;
     }
 
-    // fallback if no valid JSON
     return {};
 }
-
 
 async function callGeminiForExtraction(task) {
     const { report, schema, model, systemPrompt } = task;
@@ -1563,7 +1135,7 @@ async function callGeminiForExtraction(task) {
                 throw authError;
             }
             if (err.status === 429) {
-                throw err; // Let rate limiter handle
+                throw err;
             }
             console.error(`Attempt ${attempt + 1}: Gemini extraction error:`, err);
         }
@@ -1573,7 +1145,6 @@ async function callGeminiForExtraction(task) {
     return {};
 }
 
-
 async function executeExtractionTask(task) {
     if (currentApiProvider === API_PROVIDERS.GEMINI) {
         return await callGeminiForExtraction(task);
@@ -1582,44 +1153,11 @@ async function executeExtractionTask(task) {
     }
 }
 
-
-async function buildExtractionTasks(reports, schemaFiles, systemPrompt, model) {
-    const tasks = [];
-    for (const report of reports) {
-        const extractedBySchemaId = new Set();
-        if (report.extractions && Array.isArray(report.extractions)) {
-            for (const e of report.extractions) {
-                const hasSomeKeys = e.data && Object.keys(e.data).length > 0;
-                if (hasSomeKeys) {
-                    extractedBySchemaId.add(e.schemaId);
-                }
-            }
-        }
-
-        for (let i = 0; i < schemaFiles.length; i++) {
-            const schema = schemaFiles[i];
-            if (!extractedBySchemaId.has(i)) {
-                tasks.push({
-                    report,
-                    schema,
-                    schemaId: i,
-                    systemPrompt,
-                    model
-                });
-            }
-        }
-    }
-    return tasks;
-}
-
-
 async function displayExtractedResults(appConfig, startedAtTime, creds = null, modelRec = null) {
-    // JSON data
     const allReports = await getAllUploadedFiles();
     const combinedData = combineExtractedData(allReports);
     displayExtractedData(combinedData);
 
-    // JSON-LD
     if (appConfig?.jsonldContextFiles) {
         if (!creds) creds = await getConfigRecord('llmApiCreds');
         if (!modelRec) modelRec = await getConfigRecord('model');
@@ -1645,28 +1183,42 @@ async function displayExtractedResults(appConfig, startedAtTime, creds = null, m
     }
 }
 
-
-function showRateLimitEarlyTerminationMessage() {
-    const container = document.getElementById('info-extraction');
-    if (!container) return;
-
-    const messageDiv = document.createElement('div');
-    messageDiv.className =
-      'mt-2 p-3 border border-red-300 bg-red-50 text-red-800 rounded text-sm';
-    messageDiv.textContent =
-      'The run terminated early due to repeated rate limit errors at the chosen API endpoint. ' +
-      'Some extractions may be incomplete.';
-
-    container.appendChild(messageDiv);
-}
-
-
 async function handleSubmitExtraction() {
     const missing = await getMissingInfo();
     if (missing.length > 0) {
         await showMissingInfoModal(missing);
         scrollToFirstMissingField(missing[0]);
         return;
+    }
+
+    let appConfig = await getConfigRecord('appConfig');
+    let creds = await getConfigRecord('llmApiCreds');
+    let modelRec = await getConfigRecord('model');
+    let reports = await getAllUploadedFiles();
+
+    if (!appConfig || !creds || !modelRec) {
+        console.error('Missing configuration or credentials; aborting.');
+        return;
+    }
+
+    // Check if there are existing extractions with a different model
+    const lastExtractionRec = await getConfigRecord('lastExtractionModel');
+    const hasExistingExtractions = reports.some(r => r.extractions && r.extractions.length > 0 &&
+        r.extractions.some(e => e.data && Object.keys(e.data).length > 0));
+
+    if (hasExistingExtractions && lastExtractionRec && lastExtractionRec.name !== modelRec.name) {
+        const shouldProceed = await showModelChangeConfirmationModal(lastExtractionRec.name, modelRec.name);
+        if (!shouldProceed) {
+            return; // User cancelled, keep old results
+        }
+        // User confirmed - clear all extractions from reports
+        for (const report of reports) {
+            report.extractions = [];
+            await putUploadedFile(report);
+        }
+        reports = await getAllUploadedFiles(); // Refresh reports
+        clearDisplayedExtractedData();
+        clearDisplayedJsonLdDoc();
     }
 
     clearDisplayedExtractedData();
@@ -1676,20 +1228,9 @@ async function handleSubmitExtraction() {
     extractionTerminated = false;
     showExtractionProgressContainer(true);
 
-    let appConfig, creds, modelRec, reports;
     const startedAtTime = new Date().toISOString();
 
     try {
-        appConfig = await getConfigRecord('appConfig');
-        creds = await getConfigRecord('llmApiCreds');
-        modelRec = await getConfigRecord('model');
-        reports = await getAllUploadedFiles();
-
-        if (!appConfig || !creds || !modelRec) {
-            console.error('Missing configuration or credentials; aborting.');
-            return;
-        }
-
         const totalReports = reports.length;
         const schemasPerReport = appConfig.schemaFiles.length;
 
@@ -1713,28 +1254,11 @@ async function handleSubmitExtraction() {
             apiCallFn: executeExtractionTask
         });
 
-        const reportTaskCountMap = new Map();
-        let completedTasks = 0;
-        let completedReports = 0;
+        const { reportTaskCountMap, completedReports: initialCompletedReports, completedTasks: initialCompletedTasks } =
+            countExtractionProgress(reports, schemasPerReport);
 
-        for (const report of reports) {
-            let extractedCount = 0;
-            if (report.extractions && Array.isArray(report.extractions)) {
-                for (const e of report.extractions) {
-                    const hasSomeKeys = e.data && Object.keys(e.data).length > 0;
-                    if (hasSomeKeys) {
-                        extractedCount++;
-                    }
-                }
-            }
-            reportTaskCountMap.set(report.id, extractedCount);
-            if (extractedCount === schemasPerReport) {
-                completedReports++;
-            }
-        }
-
-        completedTasks = Array.from(reportTaskCountMap.values())
-            .reduce((acc, val) => acc + val, 0);
+        let completedTasks = initialCompletedTasks;
+        let completedReports = initialCompletedReports;
 
         updateExtractionProgress(
             completedTasks,
@@ -1752,17 +1276,8 @@ async function handleSubmitExtraction() {
                 return;
             }
 
-            const {report, schemaId} = task;
-            if (!report.extractions) report.extractions = [];
-
-            let existing = report.extractions.find(e => e.schemaId === schemaId);
-            if (!existing) {
-                existing = {schemaId, data: {}};
-                report.extractions.push(existing);
-            }
-            if (!error) {
-                existing.data = result || {};
-            }
+            const { report, schemaId } = task;
+            updateReportWithExtraction(report, schemaId, result, error);
             await putUploadedFile(report);
 
             const prevCount = reportTaskCountMap.get(report.id) || 0;
@@ -1787,6 +1302,9 @@ async function handleSubmitExtraction() {
     } finally {
         await displayExtractedResults(appConfig, startedAtTime, creds, modelRec);
 
+        // Save the model used for this extraction
+        await saveConfigRecord({ id: 'lastExtractionModel', name: modelRec.name });
+
         if (concurrencyScheduler?.rateLimiter?.shouldTerminateEarly) {
             showRateLimitEarlyTerminationMessage();
         }
@@ -1798,60 +1316,10 @@ async function handleSubmitExtraction() {
     }
 }
 
+// =============================================================================
+// MAIN APPLICATION INITIALIZATION
+// =============================================================================
 
-function isExtractionInProgress() {
-    // if submit button is disabled, extraction must be in progress
-    const submitBtn = document.getElementById('submit-btn');
-    return submitBtn && submitBtn.disabled;
-}
-
-
-function showEraseDataConfirmationModal() {
-    return new Promise((resolve) => {
-        const overlay = document.createElement('div');
-        overlay.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
-
-        const modal = document.createElement('div');
-        modal.className = 'bg-white rounded-lg p-4 max-w-md w-full';
-        modal.innerHTML = `
-          <h2 class="text-lg font-semibold mb-2">Erase All Extracted Data?</h2>
-          <p class="mb-4">This action will permanently remove all extracted information from the database. This cannot be undone.</p>
-          <div class="flex justify-end gap-2">
-            <button id="erase-cancel" class="border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2 rounded">
-              Cancel
-            </button>
-            <button id="erase-confirm" class="bg-red-800 hover:bg-red-700 text-white px-4 py-2 rounded">
-              Erase
-            </button>
-          </div>
-        `;
-        overlay.appendChild(modal);
-        document.body.appendChild(overlay);
-
-        const cancelBtn = modal.querySelector('#erase-cancel');
-        const confirmBtn = modal.querySelector('#erase-confirm');
-
-        cancelBtn.addEventListener('click', () => {
-            document.body.removeChild(overlay);
-            resolve(false);
-        });
-        confirmBtn.addEventListener('click', () => {
-            document.body.removeChild(overlay);
-            resolve(true);
-        });
-    });
-}
-
-
-/*
- * -------------------------------------------------------------
- * MAIN APPLICATION LOGIC
- * -------------------------------------------------------------
- */
-
-/**
- * Cleans up deprecated WebLLM-related records from IndexedDB
- */
 async function cleanupWebLLMRecords() {
     try {
         await deleteConfigRecord('webllmModel');
@@ -1860,7 +1328,6 @@ async function cleanupWebLLMRecords() {
         console.warn('Error cleaning up WebLLM records:', err);
     }
 }
-
 
 async function init() {
     ui('app');
@@ -1925,7 +1392,6 @@ async function init() {
         submitBtn.addEventListener('click', handleSubmitExtraction);
     }
 }
-
 
 document.addEventListener('DOMContentLoaded', async () => {
     await init();

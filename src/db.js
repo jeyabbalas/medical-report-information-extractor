@@ -73,6 +73,11 @@ async function clearUploadedFiles() {
     await db.clear('reports');
 }
 
+async function deleteUploadedFile(fileId) {
+    const db = await getOrCreateDB();
+    return db.delete('reports', fileId);
+}
+
 
 export {
     getOrCreateDB,
@@ -81,5 +86,6 @@ export {
     deleteConfigRecord,
     putUploadedFile,
     getAllUploadedFiles,
-    clearUploadedFiles
+    clearUploadedFiles,
+    deleteUploadedFile
 };
