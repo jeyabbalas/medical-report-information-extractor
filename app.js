@@ -55,7 +55,8 @@ import {
     activateProviderTab,
     clearModelsDropdown,
     setApiKeyMessage,
-    clearApiKeyMessage
+    clearApiKeyMessage,
+    setProviderChangeCallback
 } from './src/ui/providerTabs.js';
 
 import { OpenAI } from 'openai';
@@ -513,51 +514,100 @@ function detectApiProvider(baseUrl) {
     return API_PROVIDERS.OPENAI;
 }
 
+/**
+ * Sync models dropdown when provider tab changes.
+ * Loads credentials for the given provider and populates models if valid.
+ * @param {string} provider - The provider ID ('openai' or 'gemini')
+ */
+async function syncModelsForProvider(provider) {
+    clearModelsDropdown();
+    clearApiKeyMessage();
+
+    const credsKey = `llmApiCreds_${provider}`;
+    const storedCreds = await getConfigRecord(credsKey);
+
+    // Populate form fields from stored credentials
+    if (provider === API_PROVIDERS.GEMINI) {
+        const field = document.getElementById('gemini-api-key');
+        if (field) field.value = storedCreds?.apiKey ?? '';
+    } else {
+        const urlField = document.getElementById('openai-base-url');
+        const keyField = document.getElementById('openai-api-key');
+        if (urlField) urlField.value = storedCreds?.baseUrl ?? '';
+        if (keyField) keyField.value = storedCreds?.apiKey ?? '';
+    }
+
+    if (!storedCreds?.apiKey) {
+        // No credentials - dropdown stays cleared with placeholder
+        return;
+    }
+
+    // Validate and create client
+    if (provider === API_PROVIDERS.GEMINI) {
+        const isValid = await validateGeminiApiKey(storedCreds.apiKey);
+        if (isValid) {
+            await createGlobalGeminiClient(storedCreds.apiKey);
+            openaiClient = null;
+            setApiKeyMessage('✓ Gemini API key is valid.', true);
+        } else {
+            setApiKeyMessage('Stored Gemini API key is invalid.', false);
+        }
+    } else {
+        const isValid = await validateOpenAiApiKey(storedCreds.baseUrl, storedCreds.apiKey);
+        if (isValid) {
+            await createGlobalOpenAiClient(storedCreds.baseUrl, storedCreds.apiKey);
+            geminiClient = null;
+            setApiKeyMessage('✓ OpenAI API key is valid.', true);
+        } else {
+            setApiKeyMessage('Stored OpenAI API key is invalid.', false);
+        }
+    }
+}
+
 async function initOpenAiCredentials() {
     try {
-        const storedCreds = await getConfigRecord('llmApiCreds');
-        if (!storedCreds) return;
+        // Register the callback for provider tab changes
+        setProviderChangeCallback(syncModelsForProvider);
 
-        const provider = storedCreds.provider || detectApiProvider(storedCreds.baseUrl);
+        // Migration: Move old 'llmApiCreds' to provider-specific key
+        const oldCreds = await getConfigRecord('llmApiCreds');
+        if (oldCreds) {
+            const provider = oldCreds.provider || detectApiProvider(oldCreds.baseUrl);
+            const newKey = `llmApiCreds_${provider}`;
 
-        // Activate correct tab
-        activateProviderTab(provider);
-
-        // Populate fields based on provider
-        if (provider === API_PROVIDERS.GEMINI) {
-            const geminiApiKeyField = document.getElementById('gemini-api-key');
-            if (geminiApiKeyField) {
-                geminiApiKeyField.value = storedCreds.apiKey ?? '';
+            // Check if new key already exists (avoid overwriting)
+            const existingNewCreds = await getConfigRecord(newKey);
+            if (!existingNewCreds) {
+                const migratedCreds = {
+                    id: newKey,
+                    baseUrl: oldCreds.baseUrl ?? '',
+                    apiKey: oldCreds.apiKey,
+                    provider: provider
+                };
+                await saveConfigRecord(migratedCreds);
             }
-        } else {
-            const openaiBaseUrlField = document.getElementById('openai-base-url');
-            const openaiApiKeyField = document.getElementById('openai-api-key');
-            if (openaiBaseUrlField) openaiBaseUrlField.value = storedCreds.baseUrl ?? '';
-            if (openaiApiKeyField) openaiApiKeyField.value = storedCreds.apiKey ?? '';
-        }
 
-        // Validate and create client
-        let isValid = false;
-
-        if (provider === API_PROVIDERS.GEMINI) {
-            isValid = await validateGeminiApiKey(storedCreds.apiKey);
-            if (isValid) {
-                await createGlobalGeminiClient(storedCreds.apiKey);
-                setApiKeyMessage('✓ Gemini API key is valid.', true);
-            }
-        } else {
-            isValid = await validateOpenAiApiKey(storedCreds.baseUrl, storedCreds.apiKey);
-            if (isValid) {
-                await createGlobalOpenAiClient(storedCreds.baseUrl, storedCreds.apiKey);
-                setApiKeyMessage('✓ OpenAI API key is valid.', true);
-            }
-        }
-
-        if (!isValid) {
-            setApiKeyMessage('Stored API key appears to be invalid.', false);
+            // Delete old key after migration
             await deleteConfigRecord('llmApiCreds');
-            await deleteConfigRecord('model');
-            clearModelsDropdown();
+        }
+
+        // Load credentials for OpenAI (default tab) first
+        const openaiCreds = await getConfigRecord(`llmApiCreds_${API_PROVIDERS.OPENAI}`);
+        const geminiCreds = await getConfigRecord(`llmApiCreds_${API_PROVIDERS.GEMINI}`);
+
+        // Determine which provider to load initially
+        // Prefer the one that has credentials, defaulting to OpenAI
+        let initialProvider = API_PROVIDERS.OPENAI;
+        if (!openaiCreds?.apiKey && geminiCreds?.apiKey) {
+            initialProvider = API_PROVIDERS.GEMINI;
+        }
+
+        // Activate the correct tab (this will trigger syncModelsForProvider via callback)
+        if (initialProvider === API_PROVIDERS.GEMINI) {
+            activateProviderTab(API_PROVIDERS.GEMINI);
+        } else {
+            // OpenAI is already the default tab, so sync manually since tab click won't fire
+            await syncModelsForProvider(API_PROVIDERS.OPENAI);
         }
     } catch (err) {
         console.error('Error retrieving API credentials from IDB:', err);
@@ -606,14 +656,14 @@ async function submitOpenAiCredentials() {
     if (!isValid) {
         setApiKeyMessage('Invalid API credentials. Please check your API key.', false);
         clearModelsDropdown();
-        await deleteConfigRecord('llmApiCreds');
+        await deleteConfigRecord(`llmApiCreds_${selectedProvider}`);
         await deleteConfigRecord('model');
         return;
     }
 
     try {
         const credsToStore = {
-            id: 'llmApiCreds',
+            id: `llmApiCreds_${selectedProvider}`,
             baseUrl: selectedProvider === API_PROVIDERS.GEMINI ? '' : baseUrl,
             apiKey,
             provider: selectedProvider
@@ -630,25 +680,28 @@ async function submitOpenAiCredentials() {
 async function forgetOpenAiCredentials() {
     clearApiKeyMessage();
     try {
-        await deleteConfigRecord('llmApiCreds');
+        const selectedProvider = getSelectedProvider();
+        await deleteConfigRecord(`llmApiCreds_${selectedProvider}`);
         await deleteConfigRecord('model');
 
-        // Clear OpenAI fields
-        const openaiBaseUrlField = document.getElementById('openai-base-url');
-        const openaiApiKeyField = document.getElementById('openai-api-key');
-        if (openaiBaseUrlField) openaiBaseUrlField.value = '';
-        if (openaiApiKeyField) openaiApiKeyField.value = '';
-
-        // Clear Gemini fields
-        const geminiApiKeyField = document.getElementById('gemini-api-key');
-        if (geminiApiKeyField) geminiApiKeyField.value = '';
+        // Clear form fields only for the current provider
+        if (selectedProvider === API_PROVIDERS.GEMINI) {
+            const geminiApiKeyField = document.getElementById('gemini-api-key');
+            if (geminiApiKeyField) geminiApiKeyField.value = '';
+            geminiClient = null;
+        } else {
+            const openaiBaseUrlField = document.getElementById('openai-base-url');
+            const openaiApiKeyField = document.getElementById('openai-api-key');
+            if (openaiBaseUrlField) openaiBaseUrlField.value = '';
+            if (openaiApiKeyField) openaiApiKeyField.value = '';
+            openaiClient = null;
+        }
 
         clearModelsDropdown();
-        openaiClient = null;
-        geminiClient = null;
         currentApiProvider = null;
 
-        setApiKeyMessage('API credentials have been removed.', true);
+        const providerName = selectedProvider === API_PROVIDERS.GEMINI ? 'Gemini' : 'OpenAI';
+        setApiKeyMessage(`${providerName} API credentials have been removed.`, true);
     } catch (err) {
         setApiKeyMessage(`Error removing credentials: ${err.message}`, false);
     }
@@ -1014,11 +1067,12 @@ async function getMissingInfo() {
         }
     }
 
-    // Remote API credentials
-    const creds = await getConfigRecord('llmApiCreds');
+    // Remote API credentials (use provider-specific key)
+    const selectedProvider = getSelectedProvider();
+    const creds = await getConfigRecord(`llmApiCreds_${selectedProvider}`);
     if (!creds || !creds.apiKey) {
         missing.push('LLM API key');
-    } else if (creds.provider === API_PROVIDERS.OPENAI && !creds.baseUrl) {
+    } else if (selectedProvider === API_PROVIDERS.OPENAI && !creds.baseUrl) {
         missing.push('LLM API Base URL (required for OpenAI-compatible APIs)');
     }
 
@@ -1038,23 +1092,29 @@ async function getMissingInfo() {
 }
 
 async function handleAuthError() {
-    await deleteConfigRecord('llmApiCreds');
+    const selectedProvider = getSelectedProvider();
+    await deleteConfigRecord(`llmApiCreds_${selectedProvider}`);
     await deleteConfigRecord('model');
 
-    const openaiBaseUrlField = document.getElementById('openai-base-url');
-    const openaiApiKeyField = document.getElementById('openai-api-key');
-    if (openaiBaseUrlField) openaiBaseUrlField.value = '';
-    if (openaiApiKeyField) openaiApiKeyField.value = '';
-
-    const geminiApiKeyField = document.getElementById('gemini-api-key');
-    if (geminiApiKeyField) geminiApiKeyField.value = '';
+    // Clear form fields only for the current provider
+    if (selectedProvider === API_PROVIDERS.GEMINI) {
+        const geminiApiKeyField = document.getElementById('gemini-api-key');
+        if (geminiApiKeyField) geminiApiKeyField.value = '';
+        geminiClient = null;
+    } else {
+        const openaiBaseUrlField = document.getElementById('openai-base-url');
+        const openaiApiKeyField = document.getElementById('openai-api-key');
+        if (openaiBaseUrlField) openaiBaseUrlField.value = '';
+        if (openaiApiKeyField) openaiApiKeyField.value = '';
+        openaiClient = null;
+    }
 
     clearModelsDropdown();
-    openaiClient = null;
-    geminiClient = null;
     currentApiProvider = null;
     setApiKeyMessage('Your API key is invalid. Please re-enter a valid key.', false);
-    document.getElementById('tab-openai')?.scrollIntoView({ behavior: 'smooth' });
+
+    const tabId = selectedProvider === API_PROVIDERS.GEMINI ? 'tab-gemini' : 'tab-openai';
+    document.getElementById(tabId)?.scrollIntoView({ behavior: 'smooth' });
 }
 
 async function callOpenAiForExtraction(task) {
@@ -1156,7 +1216,7 @@ async function displayExtractedResults(appConfig, startedAtTime, creds = null, m
     displayExtractedData(combinedData);
 
     if (appConfig?.jsonldContextFiles) {
-        if (!creds) creds = await getConfigRecord('llmApiCreds');
+        if (!creds) creds = await getConfigRecord(`llmApiCreds_${getSelectedProvider()}`);
         if (!modelRec) modelRec = await getConfigRecord('model');
 
         if (creds && modelRec) {
@@ -1189,7 +1249,7 @@ async function handleSubmitExtraction() {
     }
 
     let appConfig = await getConfigRecord('appConfig');
-    let creds = await getConfigRecord('llmApiCreds');
+    let creds = await getConfigRecord(`llmApiCreds_${getSelectedProvider()}`);
     let modelRec = await getConfigRecord('model');
     let reports = await getAllUploadedFiles();
 

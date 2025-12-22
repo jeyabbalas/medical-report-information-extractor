@@ -7,6 +7,9 @@ import { API_PROVIDERS } from '../core/constants.js';
 // Current selected provider (tracks UI state)
 let selectedProvider = API_PROVIDERS.OPENAI;
 
+// Callback for when provider changes
+let onProviderChangeCallback = null;
+
 /**
  * Get the currently selected provider
  * @returns {string} - The provider ID ('openai' or 'gemini')
@@ -23,6 +26,14 @@ export function setSelectedProvider(providerId) {
     if (providerId === API_PROVIDERS.GEMINI || providerId === API_PROVIDERS.OPENAI) {
         selectedProvider = providerId;
     }
+}
+
+/**
+ * Set callback for when provider tab changes
+ * @param {function} callback - Function to call with the new provider ID
+ */
+export function setProviderChangeCallback(callback) {
+    onProviderChangeCallback = callback;
 }
 
 /**
@@ -54,6 +65,11 @@ export function initProviderTabs() {
             const targetPanel = document.getElementById(`provider-${provider}`);
             if (targetPanel) {
                 targetPanel.classList.remove('hidden');
+            }
+
+            // Invoke callback to sync models and credentials
+            if (onProviderChangeCallback) {
+                onProviderChangeCallback(selectedProvider);
             }
         });
     });
