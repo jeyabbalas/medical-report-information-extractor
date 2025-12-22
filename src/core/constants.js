@@ -9,8 +9,6 @@ export const API_PROVIDERS = {
 };
 
 // Default LLM configuration
-export const DEFAULT_TEMPERATURE = 0.0;
-export const DEFAULT_SEED = 1234;
 export const MAX_RETRIES = 3;
 
 // Example report URLs for demo/testing

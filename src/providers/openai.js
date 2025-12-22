@@ -5,7 +5,7 @@
 
 import { OpenAI } from 'openai';
 import { BaseLLMProvider } from './base.js';
-import { DEFAULT_TEMPERATURE, DEFAULT_SEED, MAX_RETRIES, API_PROVIDERS } from '../core/constants.js';
+import { MAX_RETRIES, API_PROVIDERS } from '../core/constants.js';
 
 export class OpenAIProvider extends BaseLLMProvider {
     /**
@@ -84,7 +84,7 @@ export class OpenAIProvider extends BaseLLMProvider {
      * @returns {string[]}
      */
     getPreferredModels() {
-        return ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'];
+        return ['gpt-5-nano', 'gpt-5-mini', 'gpt-5'];
     }
 
     /**
@@ -112,9 +112,7 @@ export class OpenAIProvider extends BaseLLMProvider {
                     messages: [
                         { role: 'system', content: systemPromptContent },
                         { role: 'user', content: userQuery }
-                    ],
-                    temperature: DEFAULT_TEMPERATURE,
-                    seed: DEFAULT_SEED + attempt
+                    ]
                 });
 
                 const message = response.choices?.[0]?.message?.content || '';

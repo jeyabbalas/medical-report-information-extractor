@@ -5,7 +5,7 @@
 
 import { GoogleGenAI } from '@google/genai';
 import { BaseLLMProvider } from './base.js';
-import { DEFAULT_TEMPERATURE, MAX_RETRIES, API_PROVIDERS } from '../core/constants.js';
+import { MAX_RETRIES, API_PROVIDERS } from '../core/constants.js';
 
 export class GeminiProvider extends BaseLLMProvider {
     /**
@@ -125,10 +125,7 @@ export class GeminiProvider extends BaseLLMProvider {
             try {
                 const response = await this.client.models.generateContent({
                     model: model,
-                    contents: systemPromptContent + '\n\n' + userQuery,
-                    config: {
-                        temperature: DEFAULT_TEMPERATURE
-                    }
+                    contents: systemPromptContent + '\n\n' + userQuery
                 });
 
                 const message = response.text || '';

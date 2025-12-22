@@ -6,14 +6,8 @@
  * Supports OpenAI-compatible APIs and Google Gemini.
  */
 
-// =============================================================================
-// STYLES
-// =============================================================================
 import './src/styles.css';
 
-// =============================================================================
-// IMPORTS - Existing modules
-// =============================================================================
 import { ui } from './src/gui.js';
 import { validateJsonSchema } from './src/jsonSchemaUtils.js';
 import { validateJsonLd, buildPlainTable, buildLinkedTable } from './src/jsonLdUtils.js';
@@ -28,9 +22,6 @@ import {
 } from './src/db.js';
 import { DynamicConcurrentScheduler } from './src/apiCallManager.js';
 
-// =============================================================================
-// IMPORTS - New refactored modules
-// =============================================================================
 import { API_PROVIDERS, EXAMPLE_REPORT_URLS } from './src/core/constants.js';
 import { isAuthError } from './src/core/errors.js';
 import { buildDeveloperPrompt, buildUserQuery } from './src/extraction/prompts.js';
@@ -67,9 +58,6 @@ import {
     clearApiKeyMessage
 } from './src/ui/providerTabs.js';
 
-// =============================================================================
-// IMPORTS - External libraries
-// =============================================================================
 import { OpenAI } from 'openai';
 import { GoogleGenAI } from '@google/genai';
 
@@ -390,12 +378,17 @@ async function populateModelsDropdown() {
         let modelToSelect;
         if (storedModel && storedModel.name && modelIds.includes(storedModel.name)) {
             modelToSelect = storedModel.name;
-        } else if (modelIds.includes('gpt-4o')) {
-            modelToSelect = 'gpt-4o';
-        } else if (modelIds.includes('gpt-4o-mini')) {
-            modelToSelect = 'gpt-4o-mini';
         } else {
-            modelToSelect = modelIds[0];
+            const preferredModels = ['gpt-5-nano', 'gpt-5-mini', 'gpt-5'];
+            for (const preferred of preferredModels) {
+                if (modelIds.includes(preferred)) {
+                    modelToSelect = preferred;
+                    break;
+                }
+            }
+            if (!modelToSelect) {
+                modelToSelect = modelIds[0];
+            }
         }
         selectEl.value = modelToSelect;
 
@@ -1080,9 +1073,7 @@ async function callOpenAiForExtraction(task) {
                 messages: [
                     { role: 'developer', content: developerPrompt },
                     { role: 'user', content: userQuery }
-                ],
-                temperature: 0.0,
-                seed: 1234 + attempt
+                ]
             });
 
             const message = response.choices?.[0]?.message?.content || '';
@@ -1121,10 +1112,7 @@ async function callGeminiForExtraction(task) {
         try {
             const response = await geminiClient.models.generateContent({
                 model: model,
-                contents: developerPrompt + '\n\n' + userQuery,
-                config: {
-                    temperature: 0.0
-                }
+                contents: developerPrompt + '\n\n' + userQuery
             });
 
             const message = response.text || '';
