@@ -1,4 +1,4 @@
-import jsonld from 'https://esm.sh/jsonld@8.3.3';
+import jsonld from 'jsonld';
 
 
 /**

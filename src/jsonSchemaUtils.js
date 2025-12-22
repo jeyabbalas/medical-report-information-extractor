@@ -1,4 +1,4 @@
-import {Ajv} from 'https://cdn.jsdelivr.net/npm/ajv@8.17.1/+esm';
+import Ajv from 'ajv';
 
 
 /**

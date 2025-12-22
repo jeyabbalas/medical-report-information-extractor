@@ -3,7 +3,7 @@
  * Supports OpenAI API and compatible APIs (Azure OpenAI, vLLM, Ollama, etc.)
  */
 
-import { OpenAI } from 'https://cdn.skypack.dev/openai@4.78.1?min';
+import { OpenAI } from 'openai';
 import { BaseLLMProvider } from './base.js';
 import { DEFAULT_TEMPERATURE, DEFAULT_SEED, MAX_RETRIES, API_PROVIDERS } from '../core/constants.js';
 
@@ -100,7 +100,7 @@ export class OpenAIProvider extends BaseLLMProvider {
 
         const { report, schema, model, systemPrompt } = task;
 
-        const developerPrompt = this.buildDeveloperPrompt(systemPrompt, report.content);
+        const systemPromptContent = this.buildSystemPrompt(systemPrompt, report.content);
         const userQuery = this.buildUserQuery(schema);
 
         let attempt = 0;
@@ -110,7 +110,7 @@ export class OpenAIProvider extends BaseLLMProvider {
                 const response = await this.client.chat.completions.create({
                     model: model,
                     messages: [
-                        { role: 'developer', content: developerPrompt },
+                        { role: 'system', content: systemPromptContent },
                         { role: 'user', content: userQuery }
                     ],
                     temperature: DEFAULT_TEMPERATURE,

@@ -1,0 +1,38 @@
+{
+  "name": "medical-report-information-extractor",
+  "version": "1.0.0",
+  "description": "Medical Report Information Extractor - A web application for structured information extraction from unstructured medical reports using LLMs",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jeyabbalas/medical-report-information-extractor.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/jeyabbalas/medical-report-information-extractor/issues"
+  },
+  "homepage": "https://github.com/jeyabbalas/medical-report-information-extractor#readme",
+  "dependencies": {
+    "@google/genai": "^1.34.0",
+    "ajv": "^8.17.1",
+    "idb": "^8.0.3",
+    "jsonld": "^9.0.0",
+    "openai": "^6.15.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.18",
+    "esbuild-wasm": "0.27.2",
+    "tailwindcss": "^4.1.18",
+    "vite": "^7.3.0"
+  },
+  "overrides": {
+    "esbuild": "npm:esbuild-wasm@0.27.2"
+  }
+}

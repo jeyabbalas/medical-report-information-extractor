@@ -7,6 +7,11 @@
  */
 
 // =============================================================================
+// STYLES
+// =============================================================================
+import './src/styles.css';
+
+// =============================================================================
 // IMPORTS - Existing modules
 // =============================================================================
 import { ui } from './src/gui.js';
@@ -63,10 +68,10 @@ import {
 } from './src/ui/providerTabs.js';
 
 // =============================================================================
-// IMPORTS - External libraries (from CDN)
+// IMPORTS - External libraries
 // =============================================================================
-import { OpenAI } from 'https://cdn.skypack.dev/openai@4.78.1?min';
-import { GoogleGenAI } from 'https://cdn.jsdelivr.net/npm/@google/genai@1.0.0/+esm';
+import { OpenAI } from 'openai';
+import { GoogleGenAI } from '@google/genai';
 
 // =============================================================================
 // GLOBAL STATE

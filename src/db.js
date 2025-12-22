@@ -1,4 +1,4 @@
-import {openDB} from 'https://cdn.jsdelivr.net/npm/idb@8/+esm';
+import { openDB } from 'idb';
 
 
 async function getOrCreateDB() {

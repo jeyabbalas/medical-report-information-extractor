@@ -75,12 +75,12 @@ export class BaseLLMProvider {
     }
 
     /**
-     * Build the developer/system prompt
+     * Build the system prompt
      * @param {string} systemPrompt - The system prompt text
      * @param {string} report - The report content
      * @returns {string}
      */
-    buildDeveloperPrompt(systemPrompt, report) {
+    buildSystemPrompt(systemPrompt, report) {
         return `<instructions>\n${systemPrompt}\n</instructions>\n\n<report>\n${report}\n</report>`;
     }
 

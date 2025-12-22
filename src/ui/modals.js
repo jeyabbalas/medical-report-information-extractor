@@ -12,7 +12,7 @@ import { getMissingFieldElementId } from '../extraction/engine.js';
 export function showMissingInfoModal(missingItems) {
     return new Promise((resolve) => {
         const overlay = document.createElement('div');
-        overlay.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+        overlay.className = 'fixed inset-0 bg-gray-500/30 backdrop-blur-sm flex items-center justify-center z-50';
 
         const modal = document.createElement('div');
         modal.className = 'bg-white rounded-lg p-4 max-w-md w-full';
@@ -47,7 +47,7 @@ export function showMissingInfoModal(missingItems) {
 export function showEraseDataConfirmationModal() {
     return new Promise((resolve) => {
         const overlay = document.createElement('div');
-        overlay.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+        overlay.className = 'fixed inset-0 bg-gray-500/30 backdrop-blur-sm flex items-center justify-center z-50';
 
         const modal = document.createElement('div');
         modal.className = 'bg-white rounded-lg p-4 max-w-md w-full';
@@ -127,7 +127,7 @@ export function scrollToFirstMissingField(missingItem) {
 export function showModelChangeConfirmationModal(oldModel, newModel) {
     return new Promise((resolve) => {
         const overlay = document.createElement('div');
-        overlay.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+        overlay.className = 'fixed inset-0 bg-gray-500/30 backdrop-blur-sm flex items-center justify-center z-50';
 
         const modal = document.createElement('div');
         modal.className = 'bg-white rounded-lg p-4 max-w-md w-full mx-4';

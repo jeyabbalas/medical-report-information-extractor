@@ -57,7 +57,7 @@ function ui(divID) {
 </div>
 
 <!--Config-->
-<div id="config-container" class="mx-auto max-w-7xl mt-3 sm:mt-4 px-3 sm:px-6 lg:px-8 border rounded-lg">
+<div id="config-container" class="mx-auto max-w-7xl mt-3 sm:mt-4 px-3 sm:px-6 lg:px-8 border border-gray-300 rounded-lg">
     <div class="space-y-3 sm:space-y-5 pt-2 sm:pt-4">
         <div class="col-span-full">
             <h2 class="text-base sm:text-lg font-semibold leading-7 text-gray-900">Application configuration</h2>
@@ -165,7 +165,7 @@ function ui(divID) {
 
 
 <!-- File upload -->
-<div id="file-upload-container" class="mx-auto max-w-7xl mt-3 sm:mt-4 px-3 sm:px-4 lg:px-8 border rounded-lg">
+<div id="file-upload-container" class="mx-auto max-w-7xl mt-3 sm:mt-4 px-3 sm:px-4 lg:px-8 border border-gray-300 rounded-lg">
     <div class="space-y-4 sm:space-y-6 pt-2 sm:pt-4">
         <div class="col-span-full">
             <h2 class="text-base sm:text-lg font-semibold leading-7 text-gray-900">Upload text reports</h2>
@@ -227,7 +227,7 @@ function ui(divID) {
 </div>
 
 <!-- Information extraction + progress UI -->
-<div class="mx-auto max-w-7xl mt-3 sm:mt-4 px-3 sm:px-4 lg:px-8 mb-4 sm:mb-6 border rounded-lg">
+<div class="mx-auto max-w-7xl mt-3 sm:mt-4 px-3 sm:px-4 lg:px-8 mb-4 sm:mb-6 border border-gray-300 rounded-lg">
     <div class="w-full md:w-11/12 lg:w-10/12 mx-auto">
         <!-- Progress bar & revolve ring for extraction -->
         <div id="extraction-progress-container" class="mt-3 hidden">
@@ -253,7 +253,7 @@ function ui(divID) {
 </div>
 
 <!-- Data standardization -->
-<div class="mx-auto max-w-7xl mt-3 sm:mt-4 px-3 sm:px-4 lg:px-8 mb-4 sm:mb-6 border rounded-lg">
+<div class="mx-auto max-w-7xl mt-3 sm:mt-4 px-3 sm:px-4 lg:px-8 mb-4 sm:mb-6 border border-gray-300 rounded-lg">
     <div class="w-full md:w-11/12 lg:w-10/12 mx-auto">
         <div id="standardization" class="w-full my-3 sm:mt-4 px-3 sm:px-4 lg:px-8"></div>
     </div>

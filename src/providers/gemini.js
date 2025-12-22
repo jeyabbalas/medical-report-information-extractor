@@ -3,7 +3,7 @@
  * Supports Google Gemini API via @google/genai
  */
 
-import { GoogleGenAI } from 'https://cdn.jsdelivr.net/npm/@google/genai@1.0.0/+esm';
+import { GoogleGenAI } from '@google/genai';
 import { BaseLLMProvider } from './base.js';
 import { DEFAULT_TEMPERATURE, MAX_RETRIES, API_PROVIDERS } from '../core/constants.js';
 
@@ -116,7 +116,7 @@ export class GeminiProvider extends BaseLLMProvider {
 
         const { report, schema, model, systemPrompt } = task;
 
-        const developerPrompt = this.buildDeveloperPrompt(systemPrompt, report.content);
+        const systemPromptContent = this.buildSystemPrompt(systemPrompt, report.content);
         const userQuery = this.buildUserQuery(schema);
 
         let attempt = 0;
@@ -125,7 +125,7 @@ export class GeminiProvider extends BaseLLMProvider {
             try {
                 const response = await this.client.models.generateContent({
                     model: model,
-                    contents: developerPrompt + '\n\n' + userQuery,
+                    contents: systemPromptContent + '\n\n' + userQuery,
                     config: {
                         temperature: DEFAULT_TEMPERATURE
                     }
